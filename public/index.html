@@ -1281,7 +1281,7 @@ document.addEventListener("input",e=>{
           if(!results.length){resultsEl.innerHTML=`<div class="weather-city-result"><span class="wcr-name" style="color:#64748b">No results found</span></div>`;return;}
           resultsEl.innerHTML=results.map((r,idx)=>{
             const sub=[r.state,r.country].filter(Boolean).join(", ");
-            return`<div class="weather-city-result" data-action="weather-pick-city" data-cat="${ci}" data-svc="${si}" data-idx="${idx}" data-name="${h(r.name)}" data-country="${h(r.country_code)}" data-lat="${r.lat}" data-lon="${r.lon}"><div class="wcr-name">${h(r.name)}${r.country_code?" <span style='font-size:10px;opacity:.6'>"+h(r.country_code)+"</span>":""}</div><div class="wcr-sub">${h(sub)}</div></div>`;
+            return`<div class="weather-city-result" data-action="weather-pick-city" data-cat="${ci}" data-svc="${si}" data-idx="${idx}" data-name="${h(r.name)}" data-country="${h(r.country_code)}" data-lat="${parseFloat(r.lat)||0}" data-lon="${parseFloat(r.lon)||0}"><div class="wcr-name">${h(r.name)}${r.country_code?" <span style='font-size:10px;opacity:.6'>"+h(r.country_code)+"</span>":""}</div><div class="wcr-sub">${h(sub)}</div></div>`;
           }).join("");
         }catch(e){resultsEl.innerHTML=`<div class="weather-city-result"><span class="wcr-name" style="color:#ef4444">Error: ${h(e.message)}</span></div>`;}
       },350);
