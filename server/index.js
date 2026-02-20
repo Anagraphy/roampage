@@ -14,10 +14,17 @@ const HEALTH_CACHE_TTL = 60 * 1000; // 60 seconds
 
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
+  // Loopback
+  "localhost",
+  "127.0.0.1",
+  "[::1]",             // IPv6 loopback (Node URL parser wraps IPv6 in brackets)
+  // All-zeros
+  "0.0.0.0",
+  "[::]",              // IPv6 all-zeros
+  // Cloud metadata services
   "169.254.169.254",          // AWS / Azure link-local metadata
   "metadata.google.internal", // GCP metadata
   "100.100.100.200",          // Alibaba Cloud metadata
-  "0.0.0.0",
 ]);
 
 function validateUrl(raw) {
@@ -32,6 +39,10 @@ function validateUrl(raw) {
   }
   const hostname = parsed.hostname.toLowerCase();
   if (BLOCKED_HOSTS.has(hostname)) {
+    throw new Error("Blocked host");
+  }
+  // Block entire 127.0.0.0/8 loopback range (not just 127.0.0.1)
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
     throw new Error("Blocked host");
   }
   return parsed;
