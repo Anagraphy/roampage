@@ -5,23 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:3000"
-    # Encryption key for config / backups (AES-256-GCM). Three modes:
-    #
-    #   (default) no environment variable
-    #     → a random key is saved to ./data/.roampage.key on first run.
-    #       Survives container restarts as long as the ./data volume is intact.
-    #       Backups become unrestorable if that key file is lost.
-    #
-    #   ENCRYPTION_KEY: "64-hex-chars"   (recommended for reliability)
-    #     → fixed key, stays valid across rebuilds / volume migrations.
-    #       Generate once: openssl rand -hex 32
-    #
-    #   ENCRYPTION_KEY: "none"           (plaintext, no encryption)
-    #     → config and backups stored as readable JSON.
-    #       Backups are always restorable; no key to lose.
-    #
     # environment:
-    #   ENCRYPTION_KEY: "none"
+    #   ENCRYPTION_KEY: "none"  # or a 64-char hex key — see README
     volumes:
       - ./data:/data
 

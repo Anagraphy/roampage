@@ -26,6 +26,19 @@ You can also manually edit the config file at the mounted volume path `/data/con
 |---|---|---|
 | `PORT` | `3000` | Internal port the server listens on |
 | `CONFIG_PATH` | `/data/config.json` | Path to the config file |
+| `ENCRYPTION_KEY` | *(auto)* | AES-256-GCM key for config & backups — see below |
+
+### Encryption
+
+Config and backups are encrypted at rest with AES-256-GCM. Three modes are available:
+
+| `ENCRYPTION_KEY` value | Behaviour |
+|---|---|
+| *(not set)* | A random key is generated on first run and saved to `./data/.roampage.key`. Survives container restarts as long as the volume is intact, but backups become unrestorable if the key file is lost. |
+| `"64-hex-chars"` | Fixed key, stays valid across rebuilds and volume migrations. **Recommended for reliability.** Generate once with `openssl rand -hex 32`. |
+| `"none"` | Encryption disabled — config and backups stored as plain JSON. Backups are always restorable; no key to manage. |
+
+> **Migration note:** switching from encrypted to `none` (or vice-versa) requires exporting your config from the UI first, then deleting `data/config.json` and any old backups before restarting with the new mode.
 ### Default docker-compose.yml
 ```yaml
 services:
