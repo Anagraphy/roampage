@@ -1248,13 +1248,21 @@ document.addEventListener("click",e=>{
     case"open-backups":{const slug=pageSlug(p);fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r=>r.json()).then(d=>{backups=d;backupModal=true;render();}).catch(()=>{backupModal=true;render();});break;}
     case"backup-close":backupModal=false;render();break;
     case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));await _embedLocalImages(exp);fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});})();break;}
-    case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"? A pre-restore backup will be created first."))break;
+    case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"?\n\nA snapshot of the current page will be saved first (visible in the backup list as 🔙 Pre-restore), so you can undo if needed."))break;
       (async()=>{
         const slug=pageSlug(p);const pre=JSON.parse(JSON.stringify(p));await _embedLocalImages(pre);
         await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:pre,slug:slug+"-pre-restore"})});
         const r=await fetch("/api/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
         const d=await r.json();
         if(d.page){await _restoreLocalImages(d.page);config.pages[config.currentPage]=d.page;saveConfig();render();}
+        else{
+          // Show user-friendly error — common cause: backup was encrypted with a different key
+          const msg=d&&d.error?d.error:"Unknown server error";
+          const isKeyErr=/unable to authenticate|unsupported state|decipher/i.test(msg);
+          alert("⚠ Restore failed"+(isKeyErr?"\n\nThis backup was encrypted with a different key (e.g. from a previous container run).\nSet a fixed ENCRYPTION_KEY in your docker-compose.yml to avoid this.":"\n\n"+msg));
+          // Refresh backup list so the pre-restore snapshot is visible
+          fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r2=>r2.json()).then(list=>{backups=list;render();}).catch(()=>{});
+        }
       })();break;}
     case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
 

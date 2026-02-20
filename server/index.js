@@ -73,15 +73,23 @@ function safeHost(url) {
 const KEY_PATH = path.join(path.dirname(CONFIG_PATH), ".roampage.key");
 const ENCRYPTED_MARKER = "ENC:";
 
+// null means encryption is intentionally disabled (ENCRYPTION_KEY=none)
 function loadOrCreateKey() {
-  // Priority 1: environment variable — recommended, keeps key out of the data volume
+  // Explicit opt-out: ENCRYPTION_KEY=none disables encryption entirely.
+  // Config and backups are stored as plain JSON. Useful when you prefer
+  // human-readable files or don't need at-rest protection.
+  if (process.env.ENCRYPTION_KEY === "none") {
+    console.log("[Config] Encryption disabled (ENCRYPTION_KEY=none) — storing plain JSON");
+    return null;
+  }
+  // Priority 1: environment variable — recommended for persistent encrypted storage
   if (process.env.ENCRYPTION_KEY) {
     const k = Buffer.from(process.env.ENCRYPTION_KEY, "hex");
     if (k.length === 32) {
       console.log("[Config] Using encryption key from ENCRYPTION_KEY env var");
       return k;
     }
-    console.warn("[Config] ENCRYPTION_KEY env var invalid (must be 64 hex chars), falling back to key file");
+    console.warn("[Config] ENCRYPTION_KEY env var invalid (must be 64 hex chars or 'none'), falling back to key file");
   }
   // Priority 2: persistent key file in /data
   try {
@@ -104,8 +112,10 @@ function loadOrCreateKey() {
 
 const ENCRYPTION_KEY = loadOrCreateKey();
 
-// At startup, encrypt any plaintext .bak left over from a previous migration
+// At startup, encrypt any plaintext .bak left over from a previous migration.
+// Skipped when encryption is disabled.
 function encryptLegacyBak() {
+  if (!ENCRYPTION_KEY) return; // encryption disabled
   const bakPath = CONFIG_PATH + ".bak";
   if (!fs.existsSync(bakPath)) return;
   try {
@@ -117,7 +127,9 @@ function encryptLegacyBak() {
   } catch (e) { console.warn("[Config] Could not encrypt .bak:", e.message); }
 }
 
+// Returns ciphertext, or plaintext unchanged when encryption is disabled.
 function encryptConfig(plaintext) {
+  if (!ENCRYPTION_KEY) return plaintext;
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf-8"), cipher.final()]);
@@ -137,14 +149,23 @@ function readConfig() {
   const raw = fs.readFileSync(CONFIG_PATH, "utf-8").trim();
   if (!raw) return null;
   if (raw.startsWith(ENCRYPTED_MARKER)) {
+    // File is encrypted but encryption is disabled → refuse rather than silently fail
+    if (!ENCRYPTION_KEY) {
+      console.error("[Config] File is encrypted but ENCRYPTION_KEY=none. " +
+        "Set a valid key to decrypt, or delete the file to start fresh.");
+      return null;
+    }
     try { return JSON.parse(decryptConfig(raw)); }
     catch (e) { console.error("[Config] Decryption failed:", e.message); return null; }
   }
-  // Plaintext JSON found → auto-migrate to encrypted storage
+  // Plaintext JSON found
   try {
     const parsed = JSON.parse(raw);
-    writeConfig(parsed);
-    console.log("[Config] Migrated config to encrypted storage");
+    if (ENCRYPTION_KEY) {
+      // Encryption is enabled → migrate to encrypted storage
+      writeConfig(parsed);
+      console.log("[Config] Migrated config to encrypted storage");
+    }
     return parsed;
   } catch (e) { console.error("[Config] Parse failed:", e.message); return null; }
 }
