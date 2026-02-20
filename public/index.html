@@ -505,7 +505,9 @@ function renderWeatherWidget(svc){
 function renderIframeWidget(svc){
   if(!svc.iframeUrl)return`<div class="widget widget-iframe" style="padding:16px"><div style="color:#64748b;font-size:12px;text-align:center">No URL set</div></div>`;
   const ht=svc.iframeHeight||200;
-  return`<div class="widget widget-iframe"><iframe src="${h(svc.iframeUrl)}" height="${ht}" loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups"></iframe></div>`;
+  // Security: allow-scripts + allow-same-origin together = sandbox escape (iframe can remove its own sandbox).
+  // allow-same-origin is removed; embedded services using localStorage may need it added back explicitly.
+  return`<div class="widget widget-iframe"><iframe src="${h(svc.iframeUrl)}" height="${ht}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -628,7 +630,7 @@ function initHomeTextWidgets(){
     if(!svc)return;
     const editor=pell.init({
       element:container,
-      onChange:html=>{svc.content=html;saveConfig();},
+      onChange:html=>{svc.content=DOMPurify.sanitize(html);saveConfig();},
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
     editor.content.innerHTML=DOMPurify.sanitize(svc.content||"<em>Click to edit...</em>");
@@ -770,11 +772,28 @@ function applyWallpaper(){
     const isPortrait=p.wallpaperFit==="contain";
     const screenIsLandscape=window.innerWidth>window.innerHeight;
     const useBlur=isPortrait&&screenIsLandscape;
+    // Use DOM API (not innerHTML) so that a crafted wallpaperDesktop URL in an
+    // imported JSON cannot inject HTML attributes (e.g. " onmouseover="…").
     const safeUrl=url.replace(/'/g,"%27");
-    const imgLayer=useBlur
-      ?`<div style="position:absolute;inset:-40px;background:url('${safeUrl}') center/cover no-repeat;filter:blur(5px) brightness(0.85)"></div>`
-      :`<div style="position:absolute;inset:0;background:url('${safeUrl}') top center/cover no-repeat"></div>`;
-    layer.innerHTML=imgLayer+`<div style="position:absolute;inset:0;background:${gradient}"></div>`;
+    layer.innerHTML="";
+    const imgDiv=document.createElement("div");
+    if(useBlur){
+      imgDiv.style.cssText="position:absolute;inset:-40px;filter:blur(5px) brightness(0.85)";
+      imgDiv.style.backgroundImage=`url('${safeUrl}')`;
+      imgDiv.style.backgroundPosition="center";
+      imgDiv.style.backgroundSize="cover";
+      imgDiv.style.backgroundRepeat="no-repeat";
+    }else{
+      imgDiv.style.cssText="position:absolute;inset:0";
+      imgDiv.style.backgroundImage=`url('${safeUrl}')`;
+      imgDiv.style.backgroundPosition="top center";
+      imgDiv.style.backgroundSize="cover";
+      imgDiv.style.backgroundRepeat="no-repeat";
+    }
+    const gradDiv=document.createElement("div");
+    gradDiv.style.cssText=`position:absolute;inset:0;background:${gradient}`;
+    layer.appendChild(imgDiv);
+    layer.appendChild(gradDiv);
     layer.style.display="block";
     shell.style.background="transparent";
     shell.style.zIndex="1";
@@ -810,7 +829,7 @@ function initPellEditors(){
     if(!svc)return;
     const editor=pell.init({
       element:container,
-      onChange:html=>{svc.content=html;saveConfig();},
+      onChange:html=>{svc.content=DOMPurify.sanitize(html);saveConfig();},
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
     editor.content.innerHTML=DOMPurify.sanitize(svc.content||"");

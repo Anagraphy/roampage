@@ -9,6 +9,11 @@ COPY server/ ./server/
 COPY public/ ./public/
 COPY entrypoint.sh /entrypoint.sh
 
+# Download frontend dependencies at build time — not committed to git
+RUN curl -sL "https://unpkg.com/pell@1.0.6/dist/pell.min.js" -o public/pell.min.js \
+ && curl -sL "https://unpkg.com/pell@1.0.6/dist/pell.min.css" -o public/pell.min.css \
+ && curl -sL "https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" -o public/purify.min.js
+
 RUN mkdir -p /data && chown -R node:node /app /data && chmod +x /entrypoint.sh
 
 ENV PORT=3000

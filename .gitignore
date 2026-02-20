@@ -1,0 +1,7 @@
+# Frontend dependencies downloaded at Docker build time
+public/pell.min.js
+public/pell.min.css
+public/purify.min.js
+
+# Runtime data
+data/
