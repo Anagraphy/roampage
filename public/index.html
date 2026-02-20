@@ -1480,6 +1480,13 @@ document.addEventListener("scroll",()=>{document.querySelectorAll(".weather-city
 
 document.addEventListener("blur",e=>{const el=e.target;
   if(el.dataset.action==="edit-srv-url"&&el.value.trim()){const prefixed=autoPrefix(el.value);if(prefixed!==el.value){el.value=prefixed;const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc),sri=parseInt(el.dataset.srv);page().categories[ci].services[si].servers[sri].url=prefixed;saveConfig();}}
+  // Auto-fill service icon from name
+  if(el.dataset.action==="edit-svc-name"&&el.value.trim()){
+    const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc);
+    const svc=page().categories[ci]?.services[si];
+    if(svc&&!svc.icon){const name=el.value.toLowerCase().replace(/[^a-z0-9]/g,"");
+      fetch("/api/icons/"+encodeURIComponent(name)+"/url").then(r=>r.json()).then(d=>{if(d.url){svc.icon=d.url;saveConfig();render();reopenSvc(ci,si);}}).catch(()=>{});}
+  }
   // Auto-fill bookmark icon from label
   if(el.dataset.action==="edit-bm-label"&&el.value.trim()){
     const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc),li=parseInt(el.dataset.li);

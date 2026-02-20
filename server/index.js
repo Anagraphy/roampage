@@ -483,24 +483,29 @@ function buildFormatMap(tree) {
   return map;
 }
 
+const ICON_URLS = [
+  "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@main/tree.json",
+  "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/tree.json",
+];
+
+async function fetchIconsData() {
+  let tree = null;
+  for (const url of ICON_URLS) {
+    try { const resp = await fetch(url, { signal: AbortSignal.timeout(10000) }); if (resp.ok) { tree = await resp.json(); break; } } catch (e) { console.warn(`Failed: ${url} - ${e.message}`); }
+  }
+  if (!tree) throw new Error("All icon sources failed");
+  formatMap = buildFormatMap(tree);
+  const icons = extractIconNames(tree);
+  console.log(`Loaded ${icons.length} icons`);
+  iconsCache = icons;
+  iconsCacheTime = Date.now();
+  return icons;
+}
+
 app.get("/api/icons", async (req, res) => {
   try {
     if (iconsCache && Date.now() - iconsCacheTime < ICONS_CACHE_TTL) return res.json(iconsCache);
-    const urls = [
-      "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@main/tree.json",
-      "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/tree.json",
-    ];
-    let tree = null;
-    for (const url of urls) {
-      try { const resp = await fetch(url, { signal: AbortSignal.timeout(10000) }); if (resp.ok) { tree = await resp.json(); break; } } catch (e) { console.warn(`Failed: ${url} - ${e.message}`); }
-    }
-    if (!tree) throw new Error("All icon sources failed");
-    formatMap = buildFormatMap(tree);
-    const icons = extractIconNames(tree);
-    console.log(`Loaded ${icons.length} icons`);
-    iconsCache = icons;
-    iconsCacheTime = Date.now();
-    res.json(icons);
+    res.json(await fetchIconsData());
   } catch (err) {
     console.error("Error fetching icons:", err.message);
     if (iconsCache) return res.json(iconsCache);
@@ -798,4 +803,5 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`🏕 Roampage running on http://0.0.0.0:${PORT}`);
   console.log(`📁 Config: ${CONFIG_PATH}`);
   console.log(`🖼  Wallpapers: ${WALLPAPER_DIR}`);
+  fetchIconsData().catch(err => console.warn("Icon preload failed:", err.message));
 });
