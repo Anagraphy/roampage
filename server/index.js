@@ -122,7 +122,6 @@ function writeConfig(data) {
 // Run once at startup to clean up any plaintext .bak left from a pre-encryption deployment
 encryptLegacyBak();
 
-app.use(express.json({ limit: "1mb" }));
 // Skip logging for health checks and integration routes (integration URLs contain API keys as query params)
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || req.url.startsWith("/api/integration/") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 
@@ -225,7 +224,7 @@ app.get("/api/config", (req, res) => {
 });
 
 // ── API: Save config ─────────────────────────────────────────
-app.post("/api/config", (req, res) => {
+app.post("/api/config", express.json({ limit: "500kb" }), (req, res) => {
   try {
     writeConfig(req.body);
     res.json({ ok: true });
@@ -289,7 +288,7 @@ app.get("/api/backups", (req, res) => {
 });
 
 // Create manual backup (for a specific page)
-app.post("/api/backups", (req, res) => {
+app.post("/api/backups", express.json({ limit: "500kb" }), (req, res) => {
   try {
     const { page, slug } = req.body;
     if (!page) return res.status(400).json({ error: "Missing page data" });
@@ -302,7 +301,7 @@ app.post("/api/backups", (req, res) => {
 });
 
 // Restore backup (returns the page JSON to the client)
-app.post("/api/backups/restore", (req, res) => {
+app.post("/api/backups/restore", express.json({ limit: "2kb" }), (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Missing backup name" });
@@ -385,7 +384,7 @@ function validateImageMagic(buf, ext) {
   return false;
 }
 
-app.post("/api/wallpaper", (req, res) => {
+app.post("/api/wallpaper", express.json({ limit: "15mb" }), (req, res) => {
   try {
     const { name, data } = req.body; // name: "desktop.jpg", data: "base64string"
     if (!name || !data) return res.status(400).json({ error: "Missing name or data" });
@@ -584,7 +583,7 @@ app.get("/api/integration/jellyfin", cachedProxy("jellyfin", async (req) => {
 }));
 
 // Jellyfin: play/pause control
-app.post("/api/integration/jellyfin/command", express.json(), async (req, res) => {
+app.post("/api/integration/jellyfin/command", express.json({ limit: "2kb" }), async (req, res) => {
   const { url, apiKey, sessionId, command } = req.body;
   if (!url || !apiKey || !sessionId || !command) return res.status(400).json({ error: "Missing params" });
   if (!["Pause", "Unpause", "Stop", "NextItem", "PreviousItem"].includes(command)) return res.status(400).json({ error: "Invalid command" });
