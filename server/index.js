@@ -38,6 +38,28 @@ function validateUrl(raw) {
 
 app.use(express.json({ limit: "20mb" }));
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
+
+// ── Security headers ──────────────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://unpkg.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self'",
+    "frame-src https:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'self'",
+  ].join("; "));
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 // Serve wallpapers from /data/wallpapers (no cache)
 app.use("/wallpapers", (req, res, next) => {
@@ -262,24 +284,60 @@ function scheduleWeeklyBackup() {
 scheduleWeeklyBackup();
 
 // ── API: Wallpaper upload (base64) ───────────────────────────
+const WALLPAPER_MAX_BYTES = 10 * 1024 * 1024; // 10 MB after decoding
+const WALLPAPER_ALLOWED_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+// Validate file content via magic bytes (ignores extension entirely)
+function validateImageMagic(buf, ext) {
+  if (buf.length < 12) return false;
+  const e = ext.replace(".", "");
+  if (e === "jpg" || e === "jpeg") {
+    return buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
+  }
+  if (e === "png") {
+    return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47
+        && buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A;
+  }
+  if (e === "gif") {
+    return buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38;
+  }
+  if (e === "webp") {
+    return buf.slice(0, 4).toString("ascii") === "RIFF"
+        && buf.slice(8, 12).toString("ascii") === "WEBP";
+  }
+  return false;
+}
+
 app.post("/api/wallpaper", (req, res) => {
   try {
     const { name, data } = req.body; // name: "desktop.jpg", data: "base64string"
     if (!name || !data) return res.status(400).json({ error: "Missing name or data" });
 
-    // Validate extension
+    // Validate extension (SVG excluded: can contain executable JavaScript)
     const ext = path.extname(name).toLowerCase();
-    if (![".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"].includes(ext)) {
-      return res.status(400).json({ error: "Unsupported format" });
+    if (!WALLPAPER_ALLOWED_EXTS.includes(ext)) {
+      return res.status(400).json({ error: "Unsupported format (allowed: jpg, png, webp, gif)" });
+    }
+
+    // Decode base64 before any other check
+    const base64 = data.replace(/^data:image\/[^;]+;base64,/, "");
+    const buf = Buffer.from(base64, "base64");
+
+    // Size limit after decoding
+    if (buf.length > WALLPAPER_MAX_BYTES) {
+      return res.status(400).json({ error: "Image too large (max 10 MB)" });
+    }
+
+    // Validate actual file content via magic bytes
+    if (!validateImageMagic(buf, ext)) {
+      return res.status(400).json({ error: "File content does not match declared format" });
     }
 
     // Sanitize filename
     const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
     if (!fs.existsSync(WALLPAPER_DIR)) fs.mkdirSync(WALLPAPER_DIR, { recursive: true });
 
-    // Strip data URL prefix if present
-    const base64 = data.replace(/^data:image\/[^;]+;base64,/, "");
-    fs.writeFileSync(path.join(WALLPAPER_DIR, safe), Buffer.from(base64, "base64"));
+    fs.writeFileSync(path.join(WALLPAPER_DIR, safe), buf);
 
     res.json({ ok: true, url: "/wallpapers/" + safe });
   } catch (err) {
