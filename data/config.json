@@ -1,0 +1,92 @@
+{
+  "currentPage": 0,
+  "pages": [
+    {
+      "id": "page_1",
+      "title": "ROAMPAGE",
+      "tags": {
+        "PWA": "#8b5cf6",
+        "APP": "#10b981",
+        "SELFHOSTED": "#6b7280",
+        "CLOUD": "#f59e0b",
+        "DOCKER": "#3b82f6",
+        "API": "#ec4899"
+      },
+      "categories": [
+        {
+          "id": "cat_ej4hugn6",
+          "name": "NEW CATEGORY",
+          "services": [
+            {
+              "id": "wgt_3vlmiwhs",
+              "type": "widget-clock"
+            },
+            {
+              "id": "wgt_l0e1l7b2",
+              "type": "widget-weather",
+              "weatherCity": "Ploufragan (FR)",
+              "weatherLat": "48.4893432",
+              "weatherLon": "-2.7933133",
+              "weatherUnit": "celsius",
+              "_weatherData": {
+                "city": "Ploufragan (FR)",
+                "lat": "48.4893432",
+                "lon": "-2.7933133",
+                "daily": [
+                  {
+                    "date": "2026-02-20",
+                    "weathercode": 51,
+                    "temp_max": 11.8,
+                    "temp_min": 6.2
+                  },
+                  {
+                    "date": "2026-02-21",
+                    "weathercode": 51,
+                    "temp_max": 11.7,
+                    "temp_min": 10.5
+                  },
+                  {
+                    "date": "2026-02-22",
+                    "weathercode": 51,
+                    "temp_max": 11.5,
+                    "temp_min": 10
+                  },
+                  {
+                    "date": "2026-02-23",
+                    "weathercode": 3,
+                    "temp_max": 13.3,
+                    "temp_min": 9.6
+                  },
+                  {
+                    "date": "2026-02-24",
+                    "weathercode": 3,
+                    "temp_max": 14.1,
+                    "temp_min": 7.6
+                  },
+                  {
+                    "date": "2026-02-25",
+                    "weathercode": 3,
+                    "temp_max": 13.9,
+                    "temp_min": 9.9
+                  },
+                  {
+                    "date": "2026-02-26",
+                    "weathercode": 61,
+                    "temp_max": 11.5,
+                    "temp_min": 7.1
+                  }
+                ]
+              }
+            },
+            {
+              "id": "wgt_u0xas7ep",
+              "type": "widget-text",
+              "content": "<em>test</em>"
+            }
+          ]
+        }
+      ],
+      "wallpaperDesktop": "/wallpapers/desktop_page_1.webp?t=1771581995719"
+    }
+  ]
+}

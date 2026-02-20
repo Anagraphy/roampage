@@ -11,6 +11,31 @@ const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
 const healthCache = new Map();
 const HEALTH_CACHE_TTL = 60 * 1000; // 60 seconds
 
+// ── SSRF protection ───────────────────────────────────────────
+const BLOCKED_HOSTS = new Set([
+  "169.254.169.254",          // AWS / Azure link-local metadata
+  "metadata.google.internal", // GCP metadata
+  "100.100.100.200",          // Alibaba Cloud metadata
+  "0.0.0.0",
+]);
+
+function validateUrl(raw) {
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http and https URLs are allowed");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (BLOCKED_HOSTS.has(hostname)) {
+    throw new Error("Blocked host");
+  }
+  return parsed;
+}
+
 app.use(express.json({ limit: "20mb" }));
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -31,6 +56,7 @@ app.get("/health", (req, res) => {
 app.get("/api/health", async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "Missing url" });
+  try { validateUrl(url); } catch (e) { return res.status(400).json({ error: e.message }); }
 
   const now = Date.now();
   if (healthCache.has(url)) {
@@ -51,14 +77,14 @@ app.get("/api/health", async (req, res) => {
       response = await fetch(url, {
         method: 'HEAD',
         signal: controller.signal,
-        redirect: 'follow'
+        redirect: 'manual'
       });
     } catch (headError) {
       // Fallback to GET if HEAD fails (some services don't support HEAD)
       response = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
-        redirect: 'follow'
+        redirect: 'manual'
       });
     }
     
@@ -385,6 +411,7 @@ function cachedProxy(key, fetcher) {
 app.get("/api/integration/jellyfin", cachedProxy("jellyfin", async (req) => {
   const { url, apiKey } = req.query;
   if (!url || !apiKey) throw new Error("Missing url or apiKey");
+  validateUrl(url);
   const headers = {
     "X-Emby-Token": apiKey,
     "Authorization": `MediaBrowser Token="${apiKey}"`,
@@ -425,6 +452,7 @@ app.post("/api/integration/jellyfin/command", express.json(), async (req, res) =
   const { url, apiKey, sessionId, command } = req.body;
   if (!url || !apiKey || !sessionId || !command) return res.status(400).json({ error: "Missing params" });
   if (!["Pause", "Unpause", "Stop", "NextItem", "PreviousItem"].includes(command)) return res.status(400).json({ error: "Invalid command" });
+  try { validateUrl(url); } catch (e) { return res.status(400).json({ error: e.message }); }
   try {
     const headers = {
       "X-Emby-Token": apiKey,
@@ -480,6 +508,7 @@ async function piholeAuth(url, password) {
 app.get("/api/integration/pihole", cachedProxy("pihole", async (req) => {
   const { url, apiKey } = req.query;
   if (!url) throw new Error("Missing url");
+  validateUrl(url);
   // Helper: fetch v6 stats, invalidate session cache on 400/401 and retry once
   async function fetchV6(retried = false) {
     const sid = apiKey ? await piholeAuth(url, apiKey) : null;
