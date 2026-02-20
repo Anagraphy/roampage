@@ -5,6 +5,7 @@ const morgan = require("morgan");
 const crypto = require("crypto");
 
 const app = express();
+app.disable("x-powered-by"); // Don't advertise the tech stack
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = process.env.CONFIG_PATH || "/data/config.json";
 const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
@@ -633,6 +634,8 @@ app.post("/api/integration/jellyfin/command", express.json({ limit: "2kb" }), as
   const { url, apiKey, sessionId, command } = req.body;
   if (!url || !apiKey || !sessionId || !command) return res.status(400).json({ error: "Missing params" });
   if (!["Pause", "Unpause", "Stop", "NextItem", "PreviousItem"].includes(command)) return res.status(400).json({ error: "Invalid command" });
+  // Validate sessionId format to prevent path traversal (e.g. "../../api/Users")
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(sessionId)) return res.status(400).json({ error: "Invalid sessionId format" });
   try { validateUrl(url); } catch (e) { return res.status(400).json({ error: e.message }); }
   try {
     const headers = {
@@ -766,7 +769,7 @@ const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 // Search endpoint: returns up to 5 geocoding candidates for disambiguation
 app.get("/api/weather/search", async (req, res) => {
   const { q } = req.query;
-  if (!q || q.trim().length < 2) return res.json([]);
+  if (!q || q.trim().length < 2 || q.length > 200) return res.json([]);
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&featuretype=city&addressdetails=1`;
     const resp = await fetch(url, {
