@@ -1,0 +1,15 @@
+services:
+  roampage:
+    build: .
+    container_name: roampage
+    restart: unless-stopped
+    ports:
+      - "3046:3000"
+    volumes:
+      - ./data:/data
+    networks:
+      - newt
+
+networks:
+  newt:
+    external: true

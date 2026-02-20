@@ -1,0 +1,61 @@
+# 🚐 Roampage
+A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
+## Features
+- **Responsive** — Works on desktop and mobile
+- **Inline editing** — Click "Config" to add/edit/remove categories, services, servers
+- **Multi-server support** — Tap a service with multiple servers to choose which one to open
+- **Multi-page** — Create multiple pages, each with their own categories, services, tags and wallpaper
+- **Live health checks** — Client-side pings show real-time up/down status for each service and server
+- **Custom tags** — Create, rename, recolor and delete tags with a built-in color picker
+- **Wallpaper** — Upload a background image per page with automatic compression and smooth gradient fade
+- **Icon browser** — Browse and search 2500+ icons from dashboardicons.com directly in the editor
+- **Persistent config** — Saved to a JSON file via Docker volume
+- **Import/Export** — Backup and restore your config as JSON, with download/upload file support
+- **Auto URL prefix** — IP addresses automatically get `http://`, domains get `https://`
+- **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
+## Quick Start
+```bash
+docker compose up -d
+```
+Open `http://localhost:3046` and click **Config** to set up your services.
+## Configuration
+All configuration is done through the web UI. Click the **Config** button in the top-right corner.
+You can also manually edit the config file at the mounted volume path `/data/config.json` inside the container).
+### Environment Variables
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | Internal port the server listens on |
+| `CONFIG_PATH` | `/data/config.json` | Path to the config file |
+### Default docker-compose.yml
+```yaml
+services:
+  roampage:
+    build: .
+    container_name: roampage
+    ports:
+      - "3046:3000"
+    volumes:
+      - roampage_data:/data
+    restart: unless-stopped
+volumes:
+  roampage_data:
+```
+### Custom port
+```yaml
+ports:
+  - "8080:3000"
+```
+### Bind mount instead of named volume
+```yaml
+volumes:
+  - ./config:/data
+```
+## Data
+- **Config** is stored at `/data/config.json`
+- **Wallpapers** are stored at `/data/wallpapers/`
+Both are persisted via the Docker volume.
+## Stack
+- **Frontend**: Vanilla HTML/CSS/JS (no framework, no build)
+- **Backend**: Node.js + Express
+- **Icons**: [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons)
+- **Storage**: JSON file + image files on disk

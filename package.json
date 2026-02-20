@@ -1,0 +1,13 @@
+{
+  "name": "roampage",
+  "version": "1.0.0",
+  "description": "Self-hosted roampage dashboard with inline configuration",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "morgan": "^1.10.0"
+  }
+}
