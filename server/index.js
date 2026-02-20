@@ -12,6 +12,12 @@ const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
 const healthCache = new Map();
 const HEALTH_CACHE_TTL = 60 * 1000; // 60 seconds
 
+// Bounded cache helper — evicts oldest entry (FIFO) when limit is reached
+function cacheSet(map, key, value, max) {
+  if (map.size >= max) map.delete(map.keys().next().value);
+  map.set(key, value);
+}
+
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
   // Loopback
@@ -42,9 +48,18 @@ function validateUrl(raw) {
     throw new Error("Blocked host");
   }
   // Block entire 127.0.0.0/8 loopback range (not just 127.0.0.1)
-  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
-    throw new Error("Blocked host");
-  }
+  if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
+  // Block RFC1918 private ranges: 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
+  const oct172 = hostname.match(/^172\.(\d+)\.\d{1,3}\.\d{1,3}$/);
+  if (oct172 && +oct172[1] >= 16 && +oct172[1] <= 31) throw new Error("Blocked host");
+  // Block entire link-local range 169.254.0.0/16
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
+  // Block IPv6 ULA (fc00::/7) and link-local (fe80::/10)
+  if (/^\[?(fc|fd|fe[89ab])[0-9a-f]/i.test(hostname)) throw new Error("Blocked host");
+  // Block IPv4-mapped IPv6 (::ffff:x.x.x.x) which could wrap a private IP
+  if (/^\[?::ffff:/i.test(hostname)) throw new Error("Blocked host");
   return parsed;
 }
 
@@ -58,6 +73,16 @@ const KEY_PATH = path.join(path.dirname(CONFIG_PATH), ".roampage.key");
 const ENCRYPTED_MARKER = "ENC:";
 
 function loadOrCreateKey() {
+  // Priority 1: environment variable — recommended, keeps key out of the data volume
+  if (process.env.ENCRYPTION_KEY) {
+    const k = Buffer.from(process.env.ENCRYPTION_KEY, "hex");
+    if (k.length === 32) {
+      console.log("[Config] Using encryption key from ENCRYPTION_KEY env var");
+      return k;
+    }
+    console.warn("[Config] ENCRYPTION_KEY env var invalid (must be 64 hex chars), falling back to key file");
+  }
+  // Priority 2: persistent key file in /data
   try {
     if (fs.existsSync(KEY_PATH)) {
       const k = fs.readFileSync(KEY_PATH);
@@ -133,7 +158,7 @@ function writeConfig(data) {
 // Run once at startup to clean up any plaintext .bak left from a pre-encryption deployment
 encryptLegacyBak();
 
-// Skip logging for health checks and integration routes (integration URLs contain API keys as query params)
+// Skip logging for health checks and integration routes (polled frequently, would generate excessive noise)
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || req.url.startsWith("/api/integration/") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 
 // ── Security headers ──────────────────────────────────────────
@@ -144,8 +169,8 @@ app.use((req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://unpkg.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
     "connect-src 'self'",
@@ -213,13 +238,13 @@ app.get("/api/health", async (req, res) => {
     const status = response.status < 400 ? 'up' : 'down';
     const prev = healthCache.get(url)?.status;
     if (prev && prev !== status) console.log(`[Health] ${safeHost(url)} → ${status} (was ${prev})`);
-    healthCache.set(url, { status, timestamp: now });
+    cacheSet(healthCache, url, { status, timestamp: now }, 200);
     res.json({ status });
   } catch (e) {
     clearTimeout(timeout);
     const prev = healthCache.get(url)?.status;
     if (prev !== 'down') console.log(`[Health] ${safeHost(url)} → down`);
-    healthCache.set(url, { status: 'down', timestamp: now });
+    cacheSet(healthCache, url, { status: 'down', timestamp: now }, 200);
     res.json({ status: 'down' });
   }
 });
@@ -237,7 +262,12 @@ app.get("/api/config", (req, res) => {
 // ── API: Save config ─────────────────────────────────────────
 app.post("/api/config", express.json({ limit: "500kb" }), (req, res) => {
   try {
-    writeConfig(req.body);
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      return res.status(400).json({ error: "Invalid config: must be an object" });
+    if (body.pages !== undefined && !Array.isArray(body.pages))
+      return res.status(400).json({ error: "Invalid config: pages must be an array" });
+    writeConfig(body);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error saving config:", err.message);
@@ -541,7 +571,7 @@ async function proxyFetch(url, headers = {}, timeout = 5000) {
 
 function cachedProxy(key, fetcher) {
   return async (req, res) => {
-    const cacheKey = key + ":" + (req.query.url || "");
+    const cacheKey = key + ":" + (req.body?.url || req.query?.url || "");
     const now = Date.now();
     if (integrationCache.has(cacheKey)) {
       const { data, timestamp } = integrationCache.get(cacheKey);
@@ -549,18 +579,18 @@ function cachedProxy(key, fetcher) {
     }
     try {
       const data = await fetcher(req);
-      integrationCache.set(cacheKey, { data, timestamp: now });
+      cacheSet(integrationCache, cacheKey, { data, timestamp: now }, 100);
       res.json(data);
     } catch (e) {
-      console.error(`[Integration] ${key} error: ${e.message} | host=${safeHost(req.query.url||"")}`);
+      console.error(`[Integration] ${key} error: ${e.message} | host=${safeHost(req.body?.url||req.query?.url||"")}`);
       res.status(502).json({ error: e.message });
     }
   };
 }
 
 // Jellyfin: currently playing sessions
-app.get("/api/integration/jellyfin", cachedProxy("jellyfin", async (req) => {
-  const { url, apiKey } = req.query;
+app.post("/api/integration/jellyfin", express.json({ limit: "2kb" }), cachedProxy("jellyfin", async (req) => {
+  const { url, apiKey } = req.body;
   if (!url || !apiKey) throw new Error("Missing url or apiKey");
   validateUrl(url);
   const headers = {
@@ -645,7 +675,7 @@ async function piholeAuth(url, password) {
     // Pi-hole v6 with no password set returns session without sid — treat as unauthenticated OK
     if (data.session?.valid === false) throw new Error(data.session?.message || "Auth failed");
     const sid = data.session?.sid || null;
-    if (sid) piholeSessions.set(url, { sid, expires: Date.now() + (data.session.validity || 300) * 1000 });
+    if (sid) cacheSet(piholeSessions, url, { sid, expires: Date.now() + (data.session.validity || 300) * 1000 }, 50);
     console.log(`[piholeAuth] auth OK for ${safeHost(url)}`);
     return sid;
   } catch (e) {
@@ -656,8 +686,8 @@ async function piholeAuth(url, password) {
   }
 }
 
-app.get("/api/integration/pihole", cachedProxy("pihole", async (req) => {
-  const { url, apiKey } = req.query;
+app.post("/api/integration/pihole", express.json({ limit: "2kb" }), cachedProxy("pihole", async (req) => {
+  const { url, apiKey } = req.body;
   if (!url) throw new Error("Missing url");
   validateUrl(url);
   // Helper: fetch v6 stats, invalidate session cache on 400/401 and retry once
@@ -686,7 +716,7 @@ app.get("/api/integration/pihole", cachedProxy("pihole", async (req) => {
 }));
 
 // System info (reads from /proc - Linux only, works inside Docker if mounted)
-app.get("/api/integration/system", cachedProxy("system", async (req) => {
+app.post("/api/integration/system", express.json({ limit: "1kb" }), cachedProxy("system", async (req) => {
   const os = require("os");
   const cpus = os.cpus();
   const totalMem = os.totalmem();
@@ -764,8 +794,11 @@ app.get("/api/weather/search", async (req, res) => {
 app.get("/api/weather", async (req, res) => {
   const { lat, lon, city, unit = "celsius" } = req.query;
   if (!lat || !lon) return res.status(400).json({ error: "Missing lat/lon" });
+  const latNum = parseFloat(lat), lonNum = parseFloat(lon);
+  if (isNaN(latNum) || isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180)
+    return res.status(400).json({ error: "Invalid coordinates" });
 
-  const cacheKey = `${parseFloat(lat).toFixed(4)},${parseFloat(lon).toFixed(4)}:${unit}`;
+  const cacheKey = `${latNum.toFixed(4)},${lonNum.toFixed(4)}:${unit}`;
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_TTL) {
     return res.json(cached.data);
@@ -773,7 +806,7 @@ app.get("/api/weather", async (req, res) => {
 
   try {
     const tempUnit = unit === "fahrenheit" ? "fahrenheit" : "celsius";
-    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&temperature_unit=${tempUnit}&timezone=auto&forecast_days=7`;
+    const meteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latNum}&longitude=${lonNum}&daily=weathercode,temperature_2m_max,temperature_2m_min&temperature_unit=${tempUnit}&timezone=auto&forecast_days=7`;
     const meteoResp = await fetch(meteoUrl, { signal: AbortSignal.timeout(8000) });
     if (!meteoResp.ok) throw new Error("Weather fetch failed");
     const meteo = await meteoResp.json();
@@ -786,7 +819,7 @@ app.get("/api/weather", async (req, res) => {
     }));
 
     const data = { city: city || "", lat, lon, daily };
-    weatherCache.set(cacheKey, { data, timestamp: Date.now() });
+    cacheSet(weatherCache, cacheKey, { data, timestamp: Date.now() }, 200);
     res.json(data);
   } catch (e) {
     console.error("[Weather]", e.message);

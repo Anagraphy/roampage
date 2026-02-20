@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/favicon.png?v=4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link href="https://unpkg.com/pell@1.0.6/dist/pell.min.css" rel="stylesheet">
+<link href="/pell.min.css" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif}
@@ -239,8 +239,10 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 </style>
 </head>
 <body>
+<div id="wp-layer" style="display:none;position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0"></div>
 <div class="shell" id="shell"><div class="container" id="app"></div></div>
-<script src="https://unpkg.com/pell@1.0.6/dist/pell.min.js"></script>
+<script src="/purify.min.js"></script>
+<script src="/pell.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
@@ -300,13 +302,15 @@ function getAllTags(){const p=page();return p.tags?Object.keys(p.tags):[];}
 
 function autoPrefix(url){url=(url||"").trim();if(!url)return url;if(/^https?:\/\//i.test(url))return url;if(/^(\d{1,3}\.){3}\d{1,3}(:\d+)?/.test(url))return"http://"+url;if(/^localhost(:\d+)?/.test(url))return"http://"+url;return"https://"+url;}
 
-function compressImage(file,maxWidth,quality){
+function compressImage(file,maxWidth,maxHeight,quality){
   return new Promise((resolve)=>{
     const img=new Image();const reader=new FileReader();
     reader.onload=()=>{
       img.onload=()=>{
         let w=img.width,ht=img.height;
-        if(w>maxWidth){ht=Math.round(ht*(maxWidth/w));w=maxWidth;}
+        const isPortrait=ht>w;
+        const ratio=Math.min(w>maxWidth?maxWidth/w:1,ht>maxHeight?maxHeight/ht:1);
+        w=Math.round(w*ratio);ht=Math.round(ht*ratio);
         const c=document.createElement("canvas");c.width=w;c.height=ht;
         const ctx=c.getContext("2d");ctx.drawImage(img,0,0,w,ht);
         // Try webp first, fallback to jpeg
@@ -314,8 +318,8 @@ function compressImage(file,maxWidth,quality){
         if(!dataUrl.startsWith("data:image/webp"))dataUrl=c.toDataURL("image/jpeg",quality);
         const origKB=Math.round(file.size/1024);
         const newKB=Math.round(dataUrl.length*0.75/1024);
-        console.log(`Wallpaper compressed: ${origKB}KB → ${newKB}KB (${w}×${ht})`);
-        resolve(dataUrl);
+        console.log(`Wallpaper compressed: ${origKB}KB → ${newKB}KB (${w}×${ht}) ${isPortrait?"portrait":"landscape"}`);
+        resolve({dataUrl,isPortrait});
       };
       img.src=reader.result;
     };
@@ -573,11 +577,11 @@ function startIntegrations(){
       if(cached)renderIntegrationData(el,type,cached.data);
       // Skip network fetch if cache is still fresh
       if(cached&&Date.now()-cached.ts<INTEG_CLIENT_TTL)return;
-      const params=new URLSearchParams();
-      if(svc.integUrl)params.set("url",svc.integUrl);
-      if(svc.integApiKey)params.set("apiKey",svc.integApiKey);
+      const body={};
+      if(svc.integUrl)body.url=svc.integUrl;
+      if(svc.integApiKey)body.apiKey=svc.integApiKey;
       try{
-        const res=await fetch(`/api/integration/${type}?${params}`);
+        const res=await fetch(`/api/integration/${type}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         const data=await res.json();
         if(!data.error)integDataCache.set(id,{data,type,ts:Date.now()});
         renderIntegrationData(el,type,data);
@@ -627,7 +631,7 @@ function initHomeTextWidgets(){
       onChange:html=>{svc.content=html;saveConfig();},
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
-    editor.content.innerHTML=svc.content||"<em>Click to edit...</em>";
+    editor.content.innerHTML=DOMPurify.sanitize(svc.content||"<em>Click to edit...</em>");
     // Force dynamic height - remove any inline/inherited min-height
     editor.content.style.minHeight="0";
     editor.content.style.height="auto";
@@ -757,23 +761,28 @@ function applyWallpaper(){
   const p=page();let url=p.wallpaperDesktop||"";
   const body=document.body;
   const shell=document.getElementById("shell");
+  const layer=document.getElementById("wp-layer");
+  const gradient="linear-gradient(to bottom,rgba(15,18,25,0.5) 0%,rgba(15,18,25,0.5) 20%,rgba(15,18,25,0.6) 40%,rgba(15,18,25,0.75) 55%,rgba(15,18,25,0.88) 70%,rgba(15,18,25,0.95) 80%,#0f1219 90%)";
+  // Clear legacy body inline background
+  body.style.backgroundImage="";body.style.backgroundSize="";body.style.backgroundPosition="";body.style.backgroundRepeat="";body.style.backgroundAttachment="";body.style.backgroundColor="#0f1219";
   if(url){
     if(url.startsWith("/wallpapers/")&&!url.includes("?t="))url+=("?t="+Date.now());
-    body.style.backgroundImage=`linear-gradient(to bottom,rgba(15,18,25,0.5) 0%,rgba(15,18,25,0.5) 20%,rgba(15,18,25,0.6) 40%,rgba(15,18,25,0.75) 55%,rgba(15,18,25,0.88) 70%,rgba(15,18,25,0.95) 80%,#0f1219 90%),url(${url})`;
-    body.style.backgroundSize="cover,cover";
-    body.style.backgroundPosition="top center,top center";
-    body.style.backgroundRepeat="no-repeat,no-repeat";
-    body.style.backgroundAttachment="scroll,scroll";
-    body.style.backgroundColor="#0f1219";
+    const isPortrait=p.wallpaperFit==="contain";
+    const screenIsLandscape=window.innerWidth>window.innerHeight;
+    const useBlur=isPortrait&&screenIsLandscape;
+    const safeUrl=url.replace(/'/g,"%27");
+    const imgLayer=useBlur
+      ?`<div style="position:absolute;inset:-40px;background:url('${safeUrl}') center/cover no-repeat;filter:blur(5px) brightness(0.85)"></div>`
+      :`<div style="position:absolute;inset:0;background:url('${safeUrl}') top center/cover no-repeat"></div>`;
+    layer.innerHTML=imgLayer+`<div style="position:absolute;inset:0;background:${gradient}"></div>`;
+    layer.style.display="block";
     shell.style.background="transparent";
+    shell.style.zIndex="1";
   }else{
-    body.style.backgroundImage="";
-    body.style.backgroundSize="";
-    body.style.backgroundPosition="";
-    body.style.backgroundRepeat="";
-    body.style.backgroundAttachment="";
-    body.style.backgroundColor="#0f1219";
+    layer.style.display="none";
+    layer.innerHTML="";
     shell.style.background="";
+    shell.style.zIndex="";
   }
 }
 
@@ -804,7 +813,7 @@ function initPellEditors(){
       onChange:html=>{svc.content=html;saveConfig();},
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
-    editor.content.innerHTML=svc.content||"";
+    editor.content.innerHTML=DOMPurify.sanitize(svc.content||"");
   });
 }
 
@@ -1452,7 +1461,7 @@ document.addEventListener("change",e=>{
     const wp=el.dataset.wp;
     const input=el;
     console.log("Wallpaper upload started:",file.name,Math.round(file.size/1024)+"KB");
-    compressImage(file,1920,0.82).then(async(dataUrl)=>{
+    compressImage(file,1920,2160,0.82).then(async({dataUrl,isPortrait})=>{
       console.log("Compressed, uploading to server...");
       try{
         const res=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:wp+"_"+page().id+".webp",data:dataUrl})});
@@ -1460,6 +1469,7 @@ document.addEventListener("change",e=>{
         console.log("Server response:",data);
         if(data.url){
           page().wallpaperDesktop=data.url+"?t="+Date.now();
+          page().wallpaperFit=isPortrait?"contain":"cover";
           saveConfig();render();
         }
       }catch(e){console.error("Upload failed",e);}
@@ -1497,6 +1507,7 @@ document.addEventListener("blur",e=>{const el=e.target;
 },true);
 
 loadConfig();
+window.addEventListener("resize",()=>{if(page()&&page().wallpaperDesktop)applyWallpaper();});
 </script>
 </body>
 </html>
