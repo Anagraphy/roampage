@@ -36,6 +36,11 @@ function validateUrl(raw) {
   return parsed;
 }
 
+// Returns only the hostname of a URL for safe logging (strips credentials and path)
+function safeHost(url) {
+  try { return new URL(url).hostname; } catch { return "[invalid]"; }
+}
+
 app.use(express.json({ limit: "20mb" }));
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 
@@ -115,13 +120,13 @@ app.get("/api/health", async (req, res) => {
     // Consider 2xx and 3xx as "up", anything else as "down"
     const status = response.status < 400 ? 'up' : 'down';
     const prev = healthCache.get(url)?.status;
-    if (prev && prev !== status) console.log(`[Health] ${url} → ${status} (was ${prev})`);
+    if (prev && prev !== status) console.log(`[Health] ${safeHost(url)} → ${status} (was ${prev})`);
     healthCache.set(url, { status, timestamp: now });
     res.json({ status });
   } catch (e) {
     clearTimeout(timeout);
     const prev = healthCache.get(url)?.status;
-    if (prev !== 'down') console.log(`[Health] ${url} → down (${e.message})`);
+    if (prev !== 'down') console.log(`[Health] ${safeHost(url)} → down`);
     healthCache.set(url, { status: 'down', timestamp: now });
     res.json({ status: 'down' });
   }
@@ -438,7 +443,7 @@ async function proxyFetch(url, headers = {}, timeout = 5000) {
   try {
     const res = await fetch(url, { headers, signal: controller.signal, redirect: "follow" });
     clearTimeout(timer);
-    if (!res.ok) { console.error(`[proxyFetch] ${res.status} on ${url}`); throw new Error(`HTTP ${res.status}`); }
+    if (!res.ok) { console.error(`[proxyFetch] ${res.status} on ${safeHost(url)}`); throw new Error(`HTTP ${res.status}`); }
     return await res.json();
   } catch (e) {
     clearTimeout(timer);
@@ -459,7 +464,7 @@ function cachedProxy(key, fetcher) {
       integrationCache.set(cacheKey, { data, timestamp: now });
       res.json(data);
     } catch (e) {
-      console.error(`[Integration] ${key} error: ${e.message} | url=${req.query.url||""}`);
+      console.error(`[Integration] ${key} error: ${e.message} | host=${safeHost(req.query.url||"")}`);
       res.status(502).json({ error: e.message });
     }
   };
@@ -553,12 +558,12 @@ async function piholeAuth(url, password) {
     if (data.session?.valid === false) throw new Error(data.session?.message || "Auth failed");
     const sid = data.session?.sid || null;
     if (sid) piholeSessions.set(url, { sid, expires: Date.now() + (data.session.validity || 300) * 1000 });
-    console.log(`[piholeAuth] v6 auth OK for ${url} — sid=${sid ? "yes" : "none (no password)"}`);
+    console.log(`[piholeAuth] auth OK for ${safeHost(url)}`);
     return sid;
   } catch (e) {
     clearTimeout(timer);
     const reason = e.name === "AbortError" ? "timeout (5s)" : e.message;
-    console.error(`[piholeAuth] failed for ${url}: ${reason}`);
+    console.error(`[piholeAuth] failed for ${safeHost(url)}: ${reason}`);
     throw e;
   }
 }
