@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const morgan = require("morgan");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,8 +42,89 @@ function safeHost(url) {
   try { return new URL(url).hostname; } catch { return "[invalid]"; }
 }
 
-app.use(express.json({ limit: "20mb" }));
-app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
+// ── Config encryption (AES-256-GCM) ───────────────────────────
+const KEY_PATH = path.join(path.dirname(CONFIG_PATH), ".roampage.key");
+const ENCRYPTED_MARKER = "ENC:";
+
+function loadOrCreateKey() {
+  try {
+    if (fs.existsSync(KEY_PATH)) {
+      const k = fs.readFileSync(KEY_PATH);
+      if (k.length === 32) return k;
+      console.warn("[Config] Key file invalid, regenerating");
+    }
+    const key = crypto.randomBytes(32);
+    fs.writeFileSync(KEY_PATH, key);
+    try { fs.chmodSync(KEY_PATH, 0o600); } catch {}
+    console.log("[Config] New encryption key generated at", KEY_PATH);
+    return key;
+  } catch (e) {
+    // /data not writable (e.g. volume not mounted) — deterministic fallback
+    console.error("[Config] Cannot manage encryption key:", e.message);
+    return crypto.createHash("sha256").update(CONFIG_PATH).digest();
+  }
+}
+
+const ENCRYPTION_KEY = loadOrCreateKey();
+
+// At startup, encrypt any plaintext .bak left over from a previous migration
+function encryptLegacyBak() {
+  const bakPath = CONFIG_PATH + ".bak";
+  if (!fs.existsSync(bakPath)) return;
+  try {
+    const raw = fs.readFileSync(bakPath, "utf-8").trim();
+    if (raw && !raw.startsWith(ENCRYPTED_MARKER)) {
+      fs.writeFileSync(bakPath, encryptConfig(raw), "utf-8");
+      console.log("[Config] Encrypted legacy plaintext .bak file");
+    }
+  } catch (e) { console.warn("[Config] Could not encrypt .bak:", e.message); }
+}
+
+function encryptConfig(plaintext) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+  const ct = Buffer.concat([cipher.update(plaintext, "utf-8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return ENCRYPTED_MARKER + Buffer.concat([iv, tag, ct]).toString("base64");
+}
+
+function decryptConfig(raw) {
+  const buf = Buffer.from(raw.slice(ENCRYPTED_MARKER.length), "base64");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, buf.slice(0, 12));
+  decipher.setAuthTag(buf.slice(12, 28));
+  return Buffer.concat([decipher.update(buf.slice(28)), decipher.final()]).toString("utf-8");
+}
+
+function readConfig() {
+  if (!fs.existsSync(CONFIG_PATH)) return null;
+  const raw = fs.readFileSync(CONFIG_PATH, "utf-8").trim();
+  if (!raw) return null;
+  if (raw.startsWith(ENCRYPTED_MARKER)) {
+    try { return JSON.parse(decryptConfig(raw)); }
+    catch (e) { console.error("[Config] Decryption failed:", e.message); return null; }
+  }
+  // Plaintext JSON found → auto-migrate to encrypted storage
+  try {
+    const parsed = JSON.parse(raw);
+    writeConfig(parsed);
+    console.log("[Config] Migrated config to encrypted storage");
+    return parsed;
+  } catch (e) { console.error("[Config] Parse failed:", e.message); return null; }
+}
+
+function writeConfig(data) {
+  const dir = path.dirname(CONFIG_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (fs.existsSync(CONFIG_PATH)) fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + ".bak");
+  fs.writeFileSync(CONFIG_PATH, encryptConfig(JSON.stringify(data, null, 2)), "utf-8");
+}
+
+// Run once at startup to clean up any plaintext .bak left from a pre-encryption deployment
+encryptLegacyBak();
+
+app.use(express.json({ limit: "1mb" }));
+// Skip logging for health checks and integration routes (integration URLs contain API keys as query params)
+app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || req.url.startsWith("/api/integration/") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 
 // ── Security headers ──────────────────────────────────────────
 app.use((req, res, next) => {
@@ -135,12 +217,7 @@ app.get("/api/health", async (req, res) => {
 // ── API: Get config ──────────────────────────────────────────
 app.get("/api/config", (req, res) => {
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const data = fs.readFileSync(CONFIG_PATH, "utf-8");
-      res.json(JSON.parse(data));
-    } else {
-      res.json(null);
-    }
+    res.json(readConfig());
   } catch (err) {
     console.error("Error reading config:", err.message);
     res.status(500).json({ error: "Failed to read config" });
@@ -150,13 +227,7 @@ app.get("/api/config", (req, res) => {
 // ── API: Save config ─────────────────────────────────────────
 app.post("/api/config", (req, res) => {
   try {
-    const dir = path.dirname(CONFIG_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    // Create backup before overwriting
-    if (fs.existsSync(CONFIG_PATH)) {
-      fs.copyFileSync(CONFIG_PATH, CONFIG_PATH + ".bak");
-    }
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(req.body, null, 2), "utf-8");
+    writeConfig(req.body);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error saving config:", err.message);
@@ -167,13 +238,11 @@ app.post("/api/config", (req, res) => {
 // ── API: Download config as file ─────────────────────────────
 app.get("/api/config/download", (req, res) => {
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      res.setHeader("Content-Disposition", "attachment; filename=roampage-config.json");
-      res.setHeader("Content-Type", "application/json");
-      res.sendFile(path.resolve(CONFIG_PATH));
-    } else {
-      res.status(404).json({ error: "No config found" });
-    }
+    const data = readConfig();
+    if (data === null) return res.status(404).json({ error: "No config found" });
+    res.setHeader("Content-Disposition", "attachment; filename=roampage-config.json");
+    res.setHeader("Content-Type", "application/json");
+    res.send(JSON.stringify(data, null, 2));
   } catch (err) {
     res.status(500).json({ error: "Failed to download config" });
   }
@@ -191,7 +260,7 @@ function createBackup(label, pageData, pageSlug) {
   const slug = (pageSlug || "page").replace(/[^a-z0-9-]/g, "");
   const name = `${slug}-${label}-${ts}.json`;
   const dest = path.join(BACKUP_DIR, name);
-  fs.writeFileSync(dest, JSON.stringify(pageData, null, 2), "utf-8");
+  fs.writeFileSync(dest, encryptConfig(JSON.stringify(pageData, null, 2)), "utf-8");
   // Prune old backups for this page slug (keep MAX_BACKUPS)
   const prefix = slug + "-";
   const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith(prefix) && f.endsWith(".json")).sort().reverse();
@@ -239,7 +308,10 @@ app.post("/api/backups/restore", (req, res) => {
     if (!name) return res.status(400).json({ error: "Missing backup name" });
     const src = path.join(BACKUP_DIR, path.basename(name));
     if (!fs.existsSync(src)) return res.status(404).json({ error: "Backup not found" });
-    const data = JSON.parse(fs.readFileSync(src, "utf-8"));
+    const raw = fs.readFileSync(src, "utf-8").trim();
+    // Support both encrypted (new) and legacy plaintext backup files
+    const json = raw.startsWith(ENCRYPTED_MARKER) ? decryptConfig(raw) : raw;
+    const data = JSON.parse(json);
     res.json({ ok: true, page: data });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -270,15 +342,15 @@ function scheduleWeeklyBackup() {
   function slugify(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "page"; }
   function doBackup() {
     try {
-      if (fs.existsSync(CONFIG_PATH)) {
-        const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+      const config = readConfig();
+      if (config) {
         const pages = config.pages || [];
         pages.forEach((pg, i) => {
           const slug = pg.slug || slugify(pg.title) || "page-" + i;
           createBackup("auto", pg, slug);
         });
         console.log(`[Backup] Auto-backup: ${pages.length} page(s) saved`);
-      }
+        }
     } catch (e) { console.error("[Backup] Auto-backup failed:", e.message); }
     setTimeout(doBackup, msUntilNextSunday3AM());
   }
@@ -441,7 +513,8 @@ async function proxyFetch(url, headers = {}, timeout = 5000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const res = await fetch(url, { headers, signal: controller.signal, redirect: "follow" });
+    // redirect:"error" prevents redirect-based SSRF: a redirect to an internal IP would bypass validateUrl()
+    const res = await fetch(url, { headers, signal: controller.signal, redirect: "error" });
     clearTimeout(timer);
     if (!res.ok) { console.error(`[proxyFetch] ${res.status} on ${safeHost(url)}`); throw new Error(`HTTP ${res.status}`); }
     return await res.json();
