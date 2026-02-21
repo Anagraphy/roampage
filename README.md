@@ -67,6 +67,34 @@ volumes:
 - **Config** is stored at `/data/config.json`
 - **Wallpapers** are stored at `/data/wallpapers/`
 Both are persisted via the Docker volume.
+## Security
+
+### Security model
+
+Roampage is designed for **trusted local networks** (home LAN, self-hosted VPN). Its security model assumes that anyone who can reach the server is allowed to use it — there is no built-in login.
+
+### No authentication
+
+Anyone who can reach Roampage can read and write your full configuration, including API keys and integration credentials stored in it.
+
+**If you expose Roampage outside your local network** (public internet, shared VPN, etc.), add authentication at the reverse-proxy layer before doing so. Tools like [Authelia](https://www.authelia.com/), [Authentik](https://goauthentik.io/), or nginx basic auth work well for this.
+
+### API keys in transit
+
+Integration credentials (Jellyfin API key, Pi-hole password, etc.) are transmitted between your browser and Roampage. On a plain HTTP setup they travel in cleartext on the local network.
+
+If this matters to you, place Roampage behind a reverse proxy that terminates HTTPS (Caddy, nginx, Traefik).
+
+### What is protected
+
+| Protection | Details |
+|---|---|
+| Config & backups at rest | AES-256-GCM encryption (see [Encryption](#encryption)) |
+| Security headers | CSP, HSTS (HTTPS only), `X-Content-Type-Options`, `Referrer-Policy` |
+| Rate limiting | All API endpoints are rate-limited per IP |
+| SSRF | Loopback and cloud metadata IPs are blocked; DNS rebinding mitigated |
+| File uploads | Extension + magic-byte validation, 10 MB size limit |
+
 ## Stack
 - **Frontend**: Vanilla HTML/CSS/JS (no framework, no build)
 - **Backend**: Node.js + Express
