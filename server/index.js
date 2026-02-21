@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const morgan = require("morgan");
 const crypto = require("crypto");
+const dns = require("dns").promises;
 
 const app = express();
 app.disable("x-powered-by"); // Don't advertise the tech stack
@@ -47,6 +48,7 @@ function makeRateLimiter(windowMs, max) {
 
 const healthRateLimit = makeRateLimiter(60 * 1000, 120);     // 120 req/min per IP
 const integrationRateLimit = makeRateLimiter(60 * 1000, 60); // 60 req/min per IP
+const configRateLimit = makeRateLimiter(60 * 1000, 30);      //  30 req/min per IP
 
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
@@ -62,6 +64,48 @@ const BLOCKED_HOSTS = new Set([
   "metadata.google.internal", // GCP metadata
   "100.100.100.200",          // Alibaba Cloud metadata
 ]);
+
+// Checks a resolved IP string (IPv4 or IPv6) against all private/loopback ranges.
+// Used as a second layer after hostname-based validation to defeat DNS rebinding.
+function isBlockedIp(ip) {
+  const h = ip.toLowerCase().replace(/^\[|\]$/g, ""); // strip IPv6 brackets if any
+  if (h === "127.0.0.1" || h === "::1" || h === "0.0.0.0" || h === "::") return true;
+  if (/^127\./.test(h)) return true;
+  if (/^10\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  const oct172 = h.match(/^172\.(\d+)\./);
+  if (oct172 && +oct172[1] >= 16 && +oct172[1] <= 31) return true;
+  if (/^169\.254\./.test(h)) return true;
+  if (/^(fc|fd|fe[89ab])[0-9a-f]/i.test(h)) return true;
+  if (/^::ffff:/i.test(h)) return true;
+  return false;
+}
+
+// DNS pre-resolution check: resolves the hostname and validates each resolved IP
+// against the same blocklist used by validateUrl. This mitigates DNS rebinding
+// attacks where a hostname initially resolves to a public IP but later switches.
+async function checkDnsResolution(hostname) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const [v4, v6] = await Promise.allSettled([
+      dns.resolve4(hostname),
+      dns.resolve6(hostname),
+    ]);
+    clearTimeout(timer);
+    const addrs = [
+      ...(v4.status === "fulfilled" ? v4.value : []),
+      ...(v6.status === "fulfilled" ? v6.value : []),
+    ];
+    // If both fail (NXDOMAIN, etc.) let the fetch attempt handle it
+    for (const ip of addrs) {
+      if (isBlockedIp(ip)) throw new Error(`Blocked host (DNS resolved to ${ip})`);
+    }
+  } catch (e) {
+    if (e.message.startsWith("Blocked host")) throw e;
+    // Other DNS errors (ENOTFOUND, SERVFAIL…) are non-fatal — the fetch will fail naturally
+  }
+}
 
 function validateUrl(raw) {
   let parsed;
@@ -133,9 +177,13 @@ function loadOrCreateKey() {
     console.log("[Config] New encryption key generated at", KEY_PATH);
     return key;
   } catch (e) {
-    // /data not writable (e.g. volume not mounted) — deterministic fallback
+    // /data not writable (e.g. volume not mounted).
+    // Encryption is disabled rather than falling back to a deterministic key derived
+    // from CONFIG_PATH (which would be guessable). Config is stored as plain JSON.
+    // Mount a persistent volume or set ENCRYPTION_KEY to enable encryption.
     console.error("[Config] Cannot manage encryption key:", e.message);
-    return crypto.createHash("sha256").update(CONFIG_PATH).digest();
+    console.error("[Config] ⚠ Encryption DISABLED — data stored as plain JSON. Mount a /data volume or set ENCRYPTION_KEY.");
+    return null;
   }
 }
 
@@ -218,6 +266,10 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // HSTS: only sent when the request arrived over HTTPS (direct TLS or reverse-proxy)
+  if (req.secure || req.headers["x-forwarded-proto"] === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
     "script-src 'self'",
@@ -260,7 +312,10 @@ app.get("/health", (req, res) => {
 app.get("/api/health", healthRateLimit, async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "Missing url" });
-  try { validateUrl(url); } catch (e) { return res.status(400).json({ error: e.message }); }
+  try {
+    const parsed = validateUrl(url);
+    await checkDnsResolution(parsed.hostname);
+  } catch (e) { return res.status(400).json({ error: e.message }); }
 
   const now = Date.now();
   if (healthCache.has(url)) {
@@ -310,7 +365,7 @@ app.get("/api/health", healthRateLimit, async (req, res) => {
 });
 
 // ── API: Get config ──────────────────────────────────────────
-app.get("/api/config", (req, res) => {
+app.get("/api/config", configRateLimit, (req, res) => {
   try {
     res.json(readConfig());
   } catch (err) {
@@ -320,7 +375,7 @@ app.get("/api/config", (req, res) => {
 });
 
 // ── API: Save config ─────────────────────────────────────────
-app.post("/api/config", express.json({ limit: "500kb" }), (req, res) => {
+app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req, res) => {
   try {
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body))
@@ -625,6 +680,8 @@ const integrationCache = new Map();
 const INTEGRATION_CACHE_TTL = 30 * 1000; // 30 seconds
 
 async function proxyFetch(url, headers = {}, timeout = 5000) {
+  // DNS pre-resolution: re-validate resolved IPs to mitigate DNS rebinding
+  await checkDnsResolution(new URL(url).hostname);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {

@@ -44,7 +44,26 @@ let healthByUrl={};
 let healthInterval=null;
 const openSvcBodies=new Set();
 let searchQuery = "";
-let healthCache = JSON.parse(localStorage.getItem('roampage-health') || '{}');
+// Load health cache from localStorage and validate each entry (guards against
+// tampered localStorage data: keys must be URL strings, values must be
+// {status:'up'|'down'|'checking', timestamp:number}).
+const VALID_STATUSES = new Set(["up","down","checking"]);
+function loadHealthCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('roampage-health') || '{}');
+    if (typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const clean = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof k !== 'string' || !k.startsWith('http') || k.length > 2048) continue;
+      if (!v || typeof v !== 'object') continue;
+      if (!VALID_STATUSES.has(v.status)) continue;
+      if (typeof v.timestamp !== 'number') continue;
+      clean[k] = {status: v.status, timestamp: v.timestamp};
+    }
+    return clean;
+  } catch { return {}; }
+}
+let healthCache = loadHealthCache();
 const HEALTH_CACHE_MAX_ENTRIES = 200;
 function saveHealthCache() {
   // Prune oldest entries if cache is too large
@@ -74,7 +93,11 @@ window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(locati
 function getTagColor(t){const p=page();return p.tags&&p.tags[t]?p.tags[t]:"#6b7280";}
 function getAllTags(){const p=page();return p.tags?Object.keys(p.tags):[];}
 
-function autoPrefix(url){url=(url||"").trim();if(!url)return url;if(/^(javascript|vbscript|data):/i.test(url))return"#";if(/^https?:\/\//i.test(url))return url;if(/^(\d{1,3}\.){3}\d{1,3}(:\d+)?/.test(url))return"http://"+url;if(/^localhost(:\d+)?/.test(url))return"http://"+url;return"https://"+url;}
+function autoPrefix(url){url=(url||"").trim();if(!url)return url;
+// Check the raw string AND the percent-decoded version to catch java%73cript: bypasses
+const decoded=url.replace(/%[0-9a-f]{2}/gi,m=>decodeURIComponent(m));
+if(/^(javascript|vbscript|data):/i.test(url)||/^(javascript|vbscript|data):/i.test(decoded))return"#";
+if(/^https?:\/\//i.test(url))return url;if(/^(\d{1,3}\.){3}\d{1,3}(:\d+)?/.test(url))return"http://"+url;if(/^localhost(:\d+)?/.test(url))return"http://"+url;return"https://"+url;}
 
 function compressImage(file,maxWidth,maxHeight,quality){
   return new Promise((resolve)=>{
