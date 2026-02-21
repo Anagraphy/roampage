@@ -266,9 +266,14 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   // HSTS: only sent when the request arrived over HTTPS (direct TLS or reverse-proxy)
-  if (req.secure || req.headers["x-forwarded-proto"] === "https") {
+  const isHttps = req.secure || req.headers["x-forwarded-proto"] === "https";
+  if (isHttps) {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
+  // frame-src: on HTTPS, restrict to https: only (http: iframes are already blocked by
+  // browser mixed-content policy, so this aligns CSP with browser behaviour — defence in depth).
+  // On HTTP, allow both http: and https: so local services load regardless of their protocol.
+  const frameSrc = isHttps ? "frame-src https:" : "frame-src https: http:";
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
     "script-src 'self'",
@@ -276,7 +281,7 @@ app.use((req, res, next) => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
     "connect-src 'self'",
-    "frame-src https: http:",
+    frameSrc,
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'self'",
