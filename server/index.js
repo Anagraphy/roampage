@@ -278,7 +278,7 @@ app.use((req, res, next) => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
     "connect-src 'self'",
-    "frame-src https:",
+    "frame-src https: http:",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'self'",
