@@ -1246,7 +1246,7 @@ document.addEventListener("change",e=>{
     const file=el.files[0];if(!file)return;
     const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc);
     const svc=page().categories[ci]?.services[si];if(!svc)return;
-    compressImage(file,1920,0.82).then(async(dataUrl)=>{
+    compressImage(file,1920,1080,0.82).then(async({dataUrl})=>{
       try{
         const name="img_"+svc.id+".webp";
         const res=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data:dataUrl})});
