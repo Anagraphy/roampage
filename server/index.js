@@ -326,6 +326,12 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+// ── Version ───────────────────────────────────────────────────
+const { version } = require("../package.json");
+app.get("/api/version", (req, res) => {
+  res.json({ version });
+});
+
 // ── API: Health check proxy ───────────────────────────────────
 app.get("/api/health", healthRateLimit, async (req, res) => {
   const url = req.query.url;

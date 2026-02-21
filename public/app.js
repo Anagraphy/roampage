@@ -1339,3 +1339,5 @@ document.addEventListener("blur",e=>{const el=e.target;
 
 loadConfig();
 window.addEventListener("resize",()=>{if(page()&&page().wallpaperDesktop)applyWallpaper();});
+
+fetch("/api/version").then(r=>r.json()).then(d=>{const f=document.getElementById("app-footer");if(f)f.textContent="roampage v"+d.version;}).catch(()=>{});
