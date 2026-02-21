@@ -19,6 +19,35 @@ function cacheSet(map, key, value, max) {
   map.set(key, value);
 }
 
+// ── Rate limiting ──────────────────────────────────────────────
+function makeRateLimiter(windowMs, max) {
+  const windows = new Map(); // ip → { count, resetAt }
+  // Periodic cleanup to prevent unbounded memory growth
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, w] of windows) {
+      if (w.resetAt <= now) windows.delete(ip);
+    }
+  }, windowMs).unref();
+  return (req, res, next) => {
+    const ip = req.ip || req.socket?.remoteAddress || "?";
+    const now = Date.now();
+    let w = windows.get(ip);
+    if (!w || w.resetAt <= now) {
+      w = { count: 0, resetAt: now + windowMs };
+      windows.set(ip, w);
+    }
+    if (++w.count > max) {
+      res.setHeader("Retry-After", Math.ceil((w.resetAt - now) / 1000));
+      return res.status(429).json({ error: "Too many requests" });
+    }
+    next();
+  };
+}
+
+const healthRateLimit = makeRateLimiter(60 * 1000, 120);     // 120 req/min per IP
+const integrationRateLimit = makeRateLimiter(60 * 1000, 60); // 60 req/min per IP
+
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
   // Loopback
@@ -205,6 +234,15 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname, "..", "public")));
+
+// ── API: no-store for all /api/ responses ────────────────────
+// Prevents browsers and proxies from caching sensitive API data
+// (config including API keys, integration tokens, etc.)
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 // Serve wallpapers from /data/wallpapers (no cache)
 app.use("/wallpapers", (req, res, next) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -219,7 +257,7 @@ app.get("/health", (req, res) => {
 });
 
 // ── API: Health check proxy ───────────────────────────────────
-app.get("/api/health", async (req, res) => {
+app.get("/api/health", healthRateLimit, async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "Missing url" });
   try { validateUrl(url); } catch (e) { return res.status(400).json({ error: e.message }); }
@@ -363,11 +401,16 @@ app.post("/api/backups", express.json({ limit: "500kb" }), (req, res) => {
   }
 });
 
+// Validate backup filename: {slug}-{label}-{iso-timestamp}.json
+// slug: [a-z0-9-]+, label: manual|auto|pre-restore, timestamp: ISO with colons/dots replaced by hyphens
+const BACKUP_NAME_RE = /^[a-z0-9-]+-(?:manual|auto|pre-restore)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/;
+
 // Restore backup (returns the page JSON to the client)
 app.post("/api/backups/restore", express.json({ limit: "2kb" }), (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Missing backup name" });
+    if (!BACKUP_NAME_RE.test(name)) return res.status(400).json({ error: "Invalid backup name" });
     const src = path.join(BACKUP_DIR, path.basename(name));
     if (!fs.existsSync(src)) return res.status(404).json({ error: "Backup not found" });
     const raw = fs.readFileSync(src, "utf-8").trim();
@@ -383,6 +426,7 @@ app.post("/api/backups/restore", express.json({ limit: "2kb" }), (req, res) => {
 // Delete backup
 app.delete("/api/backups/:name", (req, res) => {
   try {
+    if (!BACKUP_NAME_RE.test(req.params.name)) return res.status(400).json({ error: "Invalid backup name" });
     const file = path.join(BACKUP_DIR, path.basename(req.params.name));
     if (fs.existsSync(file)) fs.unlinkSync(file);
     res.json({ ok: true });
@@ -567,6 +611,10 @@ app.get("/api/icons", async (req, res) => {
 
 app.get("/api/icons/:name/url", (req, res) => {
   const name = req.params.name;
+  // Only allow safe icon names: lowercase letters, digits, hyphens (matches dashboard-icons naming)
+  if (!/^[a-z0-9-]+$/.test(name)) {
+    return res.status(400).json({ error: "Invalid icon name" });
+  }
   const fmts = formatMap[name] || ["svg"];
   const fmt = fmts.includes("svg") ? "svg" : fmts.includes("png") ? "png" : "webp";
   res.json({ name, format: fmt, url: `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/${fmt}/${name}.${fmt}` });
@@ -611,7 +659,7 @@ function cachedProxy(key, fetcher) {
 }
 
 // Jellyfin: currently playing sessions
-app.post("/api/integration/jellyfin", express.json({ limit: "2kb" }), cachedProxy("jellyfin", async (req) => {
+app.post("/api/integration/jellyfin", integrationRateLimit, express.json({ limit: "2kb" }), cachedProxy("jellyfin", async (req) => {
   const { url, apiKey } = req.body;
   if (!url || !apiKey) throw new Error("Missing url or apiKey");
   validateUrl(url);
@@ -651,7 +699,7 @@ app.post("/api/integration/jellyfin", express.json({ limit: "2kb" }), cachedProx
 }));
 
 // Jellyfin: play/pause control
-app.post("/api/integration/jellyfin/command", express.json({ limit: "2kb" }), async (req, res) => {
+app.post("/api/integration/jellyfin/command", integrationRateLimit, express.json({ limit: "2kb" }), async (req, res) => {
   const { url, apiKey, sessionId, command } = req.body;
   if (!url || !apiKey || !sessionId || !command) return res.status(400).json({ error: "Missing params" });
   if (!["Pause", "Unpause", "Stop", "NextItem", "PreviousItem"].includes(command)) return res.status(400).json({ error: "Invalid command" });
@@ -710,7 +758,7 @@ async function piholeAuth(url, password) {
   }
 }
 
-app.post("/api/integration/pihole", express.json({ limit: "2kb" }), cachedProxy("pihole", async (req) => {
+app.post("/api/integration/pihole", integrationRateLimit, express.json({ limit: "2kb" }), cachedProxy("pihole", async (req) => {
   const { url, apiKey } = req.body;
   if (!url) throw new Error("Missing url");
   validateUrl(url);
@@ -740,7 +788,7 @@ app.post("/api/integration/pihole", express.json({ limit: "2kb" }), cachedProxy(
 }));
 
 // System info (reads from /proc - Linux only, works inside Docker if mounted)
-app.post("/api/integration/system", express.json({ limit: "1kb" }), cachedProxy("system", async (req) => {
+app.post("/api/integration/system", integrationRateLimit, express.json({ limit: "1kb" }), cachedProxy("system", async (req) => {
   const os = require("os");
   const cpus = os.cpus();
   const totalMem = os.totalmem();

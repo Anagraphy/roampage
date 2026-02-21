@@ -289,7 +289,7 @@ function saveHealthCache() {
 const uid=()=>Math.random().toString(36).slice(2,10);
 const isMobile=()=>window.innerWidth<700;
 const $=s=>document.querySelector(s);
-const h=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const h=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 
 function page(){return config.pages[config.currentPage]||config.pages[0];}
 function slugify(s){return(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"page";}
