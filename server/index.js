@@ -286,6 +286,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Force revalidation for app.js so browsers pick up new versions after deployment
+app.get("/app.js", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache");
+  next();
+}, express.static(path.join(__dirname, "..", "public")));
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // ── API: no-store for all /api/ responses ────────────────────

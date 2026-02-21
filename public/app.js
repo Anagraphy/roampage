@@ -302,9 +302,10 @@ function renderWeatherWidget(svc){
 function renderIframeWidget(svc){
   if(!svc.iframeUrl)return`<div class="widget widget-iframe" style="padding:16px"><div style="color:#64748b;font-size:12px;text-align:center">No URL set</div></div>`;
   const ht=svc.iframeHeight||200;
-  // Security: allow-scripts + allow-same-origin together = sandbox escape (iframe can remove its own sandbox).
-  // allow-same-origin is removed; embedded services using localStorage may need it added back explicitly.
-  return`<div class="widget widget-iframe"><iframe src="${h(svc.iframeUrl)}" height="${ht}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe></div>`;
+  // No sandbox: homelab dashboards embed trusted self-hosted services (Grafana, Portainer,
+  // Home Assistant, etc.) that need their full origin to function. Cross-origin SOP already
+  // prevents embedded pages from accessing Roampage's cookies/DOM. Only embed trusted services.
+  return`<div class="widget widget-iframe"><iframe src="${h(svc.iframeUrl)}" height="${ht}" loading="lazy" allowfullscreen></iframe></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
