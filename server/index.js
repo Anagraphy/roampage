@@ -10,6 +10,7 @@ app.disable("x-powered-by"); // Don't advertise the tech stack
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = process.env.CONFIG_PATH || "/data/config.json";
 const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
+const IMAGES_DIR = path.join(path.dirname(CONFIG_PATH), "images");
 
 const healthCache = new Map();
 const HEALTH_CACHE_TTL = 60 * 1000; // 60 seconds
@@ -303,6 +304,14 @@ app.use("/wallpapers", (req, res, next) => {
   next();
 }, express.static(WALLPAPER_DIR));
 
+// Serve image-widget images from /data/images (no cache)
+app.use("/images", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+}, express.static(IMAGES_DIR));
+
 // ── Health check ─────────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
@@ -364,7 +373,15 @@ app.get("/api/health", healthRateLimit, async (req, res) => {
   }
 });
 
-// ── API: Get config ──────────────────────────────────────────
+// ── API: Config (read/write) ─────────────────────────────────
+// ⚠ No authentication is required to read or write the config.
+// This is intentional: Roampage is a self-hosted homelab dashboard designed to
+// run on a trusted local network. Adding auth would require credential management,
+// and most homelabs already enforce access control at the network/reverse-proxy
+// level (VPN, Authelia, Authentik, nginx basic auth, etc.).
+//
+// If you expose Roampage to the internet, make sure to add authentication at
+// the reverse-proxy layer. Consider using Authelia or similar before exposing.
 app.get("/api/config", configRateLimit, (req, res) => {
   try {
     res.json(readConfig());
@@ -589,6 +606,55 @@ app.delete("/api/wallpaper/:name", (req, res) => {
   try {
     const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const fp = path.join(WALLPAPER_DIR, safe);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete" });
+  }
+});
+
+// ── API: Image widget upload (base64) ────────────────────────
+// Separate from /api/wallpaper — images go to /data/images, wallpapers to /data/wallpapers.
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB after decoding
+const IMAGE_ALLOWED_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+
+app.post("/api/image", express.json({ limit: "15mb" }), (req, res) => {
+  try {
+    const { name, data } = req.body;
+    if (!name || !data) return res.status(400).json({ error: "Missing name or data" });
+
+    const ext = path.extname(name).toLowerCase();
+    if (!IMAGE_ALLOWED_EXTS.includes(ext)) {
+      return res.status(400).json({ error: "Unsupported format (allowed: jpg, png, webp, gif)" });
+    }
+
+    const base64 = data.replace(/^data:image\/[^;]+;base64,/, "");
+    const buf = Buffer.from(base64, "base64");
+
+    if (buf.length > IMAGE_MAX_BYTES) {
+      return res.status(400).json({ error: "Image too large (max 10 MB)" });
+    }
+
+    if (!validateImageMagic(buf, ext)) {
+      return res.status(400).json({ error: "File content does not match declared format" });
+    }
+
+    const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
+
+    fs.writeFileSync(path.join(IMAGES_DIR, safe), buf);
+    res.json({ ok: true, url: "/images/" + safe });
+  } catch (err) {
+    console.error("Image upload error:", err.message);
+    res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
+// ── API: Delete image widget image ───────────────────────────
+app.delete("/api/image/:name", (req, res) => {
+  try {
+    const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const fp = path.join(IMAGES_DIR, safe);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
     res.json({ ok: true });
   } catch (err) {
@@ -965,5 +1031,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`🏕 Roampage running on http://0.0.0.0:${PORT}`);
   console.log(`📁 Config: ${CONFIG_PATH}`);
   console.log(`🖼  Wallpapers: ${WALLPAPER_DIR}`);
+  console.log(`🖼  Images: ${IMAGES_DIR}`);
   fetchIconsData().catch(err => console.warn("Icon preload failed:", err.message));
 });

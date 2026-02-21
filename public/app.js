@@ -665,7 +665,7 @@ function renderEditWidgetWeather(svc,ci,si,total){
 }
 function renderEditWidgetIframe(svc,ci,si,total){
   const isOpen=openSvcBodies.has(`${ci}-${si}`);
-  return`<div class="edit-svc"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><span style="font-size:18px">🪟</span><span class="edit-svc-name">Iframe</span><div style="display:flex;gap:4px">${widgetMoveButtons(ci,si,total)}</div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron${isOpen?" open":""}" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:${isOpen?"flex":"none"}"><div><label class="edit-label">URL</label><input class="edit-input" value="${h(svc.iframeUrl||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="iframeUrl" placeholder="https://..."></div><div><label class="edit-label">Height (px)</label><input class="edit-input" type="number" value="${svc.iframeHeight||200}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="iframeHeight" placeholder="200"></div></div></div>`;
+  return`<div class="edit-svc"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><span style="font-size:18px">🪟</span><span class="edit-svc-name">Iframe</span><div style="display:flex;gap:4px">${widgetMoveButtons(ci,si,total)}</div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron${isOpen?" open":""}" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:${isOpen?"flex":"none"}"><div><label class="edit-label">URL</label><input class="edit-input" value="${h(svc.iframeUrl||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="iframeUrl" placeholder="https://..."></div><div><label class="edit-label">Height (px)</label><input class="edit-input" type="number" value="${svc.iframeHeight||200}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="iframeHeight" placeholder="200"></div><div style="font-size:11px;color:#64748b;padding:4px 0">⚠ Some sites (Wikipedia, Google…) block embedding via <code>X-Frame-Options</code> and will appear blank. Works best with your own self-hosted services.</div></div></div>`;
 }
 
 function renderEditWidgetIntegration(svc,ci,si,total){
@@ -823,16 +823,20 @@ async function _uploadB64(name,data){
   const r=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data})});
   const d=await r.json();return d.url||null;
 }
+async function _uploadImageB64(name,data){
+  const r=await fetch("/api/image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data})});
+  const d=await r.json();return d.url||null;
+}
 // Embed all local images (wallpaper + widget imageUrl) into the page object for export/backup
 async function _embedLocalImages(pg){
   // wallpaper
   if(pg.wallpaperDesktop&&pg.wallpaperDesktop.startsWith("/wallpapers/")){
     try{pg.wallpaperDesktopData=await _fetchToB64(pg.wallpaperDesktop);pg.wallpaperDesktop=pg.wallpaperDesktop.split("?")[0].split("/").pop();}catch(e){}
   }
-  // widget images
+  // widget images (may be in /images/ or legacy /wallpapers/)
   for(const cat of pg.categories||[]){
     for(const svc of cat.services||[]){
-      if(svc.imageUrl&&svc.imageUrl.startsWith("/wallpapers/")){
+      if(svc.imageUrl&&(svc.imageUrl.startsWith("/images/")||svc.imageUrl.startsWith("/wallpapers/"))){
         try{svc.imageUrlData=await _fetchToB64(svc.imageUrl);svc.imageUrl=svc.imageUrl.split("?")[0].split("/").pop();}catch(e){}
       }
     }
@@ -845,11 +849,11 @@ async function _restoreLocalImages(pg){
     try{const url=await _uploadB64(pg.wallpaperDesktop||("wp_"+uid()+".webp"),pg.wallpaperDesktopData);if(url)pg.wallpaperDesktop=url+"?t="+Date.now();}catch(e){}
     delete pg.wallpaperDesktopData;
   }
-  // widget images
+  // widget images → go to /data/images
   for(const cat of pg.categories||[]){
     for(const svc of cat.services||[]){
       if(svc.imageUrlData){
-        try{const url=await _uploadB64(svc.imageUrl||("img_"+uid()+".webp"),svc.imageUrlData);if(url)svc.imageUrl=url+"?t="+Date.now();}catch(e){}
+        try{const url=await _uploadImageB64(svc.imageUrl||("img_"+uid()+".webp"),svc.imageUrlData);if(url)svc.imageUrl=url+"?t="+Date.now();}catch(e){}
         delete svc.imageUrlData;
       }
     }
@@ -1272,7 +1276,7 @@ document.addEventListener("change",e=>{
     compressImage(file,1920,1080,0.82).then(async({dataUrl})=>{
       try{
         const name="img_"+svc.id+".webp";
-        const res=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data:dataUrl})});
+        const res=await fetch("/api/image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data:dataUrl})});
         const data=await res.json();
         if(data.url){svc.imageUrl=data.url+"?t="+Date.now();saveConfig();render();}
       }catch(e){console.error("Image upload failed",e);}
