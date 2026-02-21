@@ -5,3 +5,6 @@ public/purify.min.js
 
 # Runtime data
 data/
+
+# Node
+node_modules/

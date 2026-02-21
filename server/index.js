@@ -328,7 +328,8 @@ app.get("/health", (req, res) => {
 
 // ── Version ───────────────────────────────────────────────────
 const { version } = require("../package.json");
-app.get("/api/version", (req, res) => {
+const versionRateLimit = makeRateLimiter(60 * 1000, 30); // 30 req/min per IP
+app.get("/api/version", versionRateLimit, (req, res) => {
   res.json({ version });
 });
 
