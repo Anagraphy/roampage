@@ -1261,6 +1261,7 @@ window.addEventListener("resize",()=>{
 });
 document.addEventListener("change",e=>{
   const el=e.target;
+  if(!el||!el.dataset)return;
   if(el.dataset.action==="recolor-tag"){page().tags[el.dataset.tag]=el.value;saveConfig();const pill=el.closest("div");if(pill)pill.style.borderColor=el.value;}
   // Widget field change (for datetime-local, number etc)
   if(el.dataset.action==="edit-widget-field"){
@@ -1318,6 +1319,7 @@ document.addEventListener("click",e=>{if(!e.target.closest(".weather-city-search
 document.addEventListener("scroll",()=>{document.querySelectorAll(".weather-city-results").forEach(d=>d.style.display="none");},true);
 
 document.addEventListener("blur",e=>{const el=e.target;
+  if(!el||!el.dataset)return;
   if(el.dataset.action==="edit-srv-url"&&el.value.trim()){const prefixed=autoPrefix(el.value);if(prefixed!==el.value){el.value=prefixed;const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc),sri=parseInt(el.dataset.srv);page().categories[ci].services[si].servers[sri].url=prefixed;saveConfig();}}
   // Auto-fill service icon from name
   if(el.dataset.action==="edit-svc-name"&&el.value.trim()){

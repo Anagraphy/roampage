@@ -66,19 +66,17 @@ const BLOCKED_HOSTS = new Set([
   "100.100.100.200",          // Alibaba Cloud metadata
 ]);
 
-// Checks a resolved IP string (IPv4 or IPv6) against all private/loopback ranges.
-// Used as a second layer after hostname-based validation to defeat DNS rebinding.
+// Checks a resolved IP string (IPv4 or IPv6) against loopback/metadata ranges.
+// RFC1918 private ranges (10.x, 192.168.x, 172.16-31.x) are intentionally allowed
+// because Roampage is a homelab dashboard that must reach LAN services.
 function isBlockedIp(ip) {
   const h = ip.toLowerCase().replace(/^\[|\]$/g, ""); // strip IPv6 brackets if any
   if (h === "127.0.0.1" || h === "::1" || h === "0.0.0.0" || h === "::") return true;
   if (/^127\./.test(h)) return true;
-  if (/^10\./.test(h)) return true;
-  if (/^192\.168\./.test(h)) return true;
-  const oct172 = h.match(/^172\.(\d+)\./);
-  if (oct172 && +oct172[1] >= 16 && +oct172[1] <= 31) return true;
+  // Block cloud metadata link-local (169.254.169.254 is also in BLOCKED_HOSTS)
   if (/^169\.254\./.test(h)) return true;
-  if (/^(fc|fd|fe[89ab])[0-9a-f]/i.test(h)) return true;
-  if (/^::ffff:/i.test(h)) return true;
+  // Block IPv6 loopback-mapped addresses only
+  if (/^::ffff:127\./i.test(h)) return true;
   return false;
 }
 
@@ -122,19 +120,16 @@ function validateUrl(raw) {
   if (BLOCKED_HOSTS.has(hostname)) {
     throw new Error("Blocked host");
   }
-  // Block entire 127.0.0.0/8 loopback range (not just 127.0.0.1)
+  // Block loopback range (127.0.0.0/8) — server's own loopback must not be reachable
   if (/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
-  // Block RFC1918 private ranges: 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
-  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
-  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
-  const oct172 = hostname.match(/^172\.(\d+)\.\d{1,3}\.\d{1,3}$/);
-  if (oct172 && +oct172[1] >= 16 && +oct172[1] <= 31) throw new Error("Blocked host");
-  // Block entire link-local range 169.254.0.0/16
+  // RFC1918 private ranges (10.x, 192.168.x, 172.16-31.x) are intentionally allowed:
+  // Roampage is a homelab dashboard designed to reach LAN services.
+  // Block cloud metadata link-local range 169.254.0.0/16
   if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(hostname)) throw new Error("Blocked host");
   // Block IPv6 ULA (fc00::/7) and link-local (fe80::/10)
   if (/^\[?(fc|fd|fe[89ab])[0-9a-f]/i.test(hostname)) throw new Error("Blocked host");
-  // Block IPv4-mapped IPv6 (::ffff:x.x.x.x) which could wrap a private IP
-  if (/^\[?::ffff:/i.test(hostname)) throw new Error("Blocked host");
+  // Block IPv4-mapped IPv6 pointing to loopback (::ffff:127.x.x.x)
+  if (/^\[?::ffff:127\./i.test(hostname)) throw new Error("Blocked host");
   return parsed;
 }
 
