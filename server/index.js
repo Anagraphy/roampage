@@ -50,6 +50,9 @@ function makeRateLimiter(windowMs, max) {
 const healthRateLimit = makeRateLimiter(60 * 1000, 120);     // 120 req/min per IP
 const integrationRateLimit = makeRateLimiter(60 * 1000, 60); // 60 req/min per IP
 const configRateLimit = makeRateLimiter(60 * 1000, 30);      //  30 req/min per IP
+const uploadRateLimit = makeRateLimiter(60 * 1000, 10);      //  10 uploads/min per IP
+const weatherRateLimit = makeRateLimiter(60 * 1000, 30);     //  30 req/min per IP
+const iconsRateLimit = makeRateLimiter(60 * 1000, 60);       //  60 req/min per IP
 
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
@@ -264,7 +267,7 @@ app.use((req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   // HSTS: only sent when the request arrived over HTTPS (direct TLS or reverse-proxy)
   if (req.secure || req.headers["x-forwarded-proto"] === "https") {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
@@ -409,7 +412,7 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
 });
 
 // ── API: Download config as file ─────────────────────────────
-app.get("/api/config/download", (req, res) => {
+app.get("/api/config/download", configRateLimit, (req, res) => {
   try {
     const data = readConfig();
     if (data === null) return res.status(404).json({ error: "No config found" });
@@ -445,7 +448,7 @@ function createBackup(label, pageData, pageSlug) {
 }
 
 // List backups (filtered by page slug)
-app.get("/api/backups", (req, res) => {
+app.get("/api/backups", configRateLimit, (req, res) => {
   try {
     if (!fs.existsSync(BACKUP_DIR)) return res.json([]);
     const slug = req.query.slug || "";
@@ -457,12 +460,13 @@ app.get("/api/backups", (req, res) => {
     });
     res.json(backups);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Backup] list error:", err.message);
+    res.status(500).json({ error: "Failed to list backups" });
   }
 });
 
 // Create manual backup (for a specific page)
-app.post("/api/backups", express.json({ limit: "500kb" }), (req, res) => {
+app.post("/api/backups", configRateLimit, express.json({ limit: "500kb" }), (req, res) => {
   try {
     const { page, slug } = req.body;
     if (!page) return res.status(400).json({ error: "Missing page data" });
@@ -470,7 +474,8 @@ app.post("/api/backups", express.json({ limit: "500kb" }), (req, res) => {
     if (!backup) return res.status(400).json({ error: "Failed to create backup" });
     res.json(backup);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Backup] create error:", err.message);
+    res.status(500).json({ error: "Failed to create backup" });
   }
 });
 
@@ -479,7 +484,7 @@ app.post("/api/backups", express.json({ limit: "500kb" }), (req, res) => {
 const BACKUP_NAME_RE = /^[a-z0-9-]+-(?:manual|auto|pre-restore)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/;
 
 // Restore backup (returns the page JSON to the client)
-app.post("/api/backups/restore", express.json({ limit: "2kb" }), (req, res) => {
+app.post("/api/backups/restore", configRateLimit, express.json({ limit: "2kb" }), (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Missing backup name" });
@@ -492,19 +497,22 @@ app.post("/api/backups/restore", express.json({ limit: "2kb" }), (req, res) => {
     const data = JSON.parse(json);
     res.json({ ok: true, page: data });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Backup] restore error:", err.message);
+    if (err instanceof SyntaxError) return res.status(500).json({ error: "Backup file is corrupted" });
+    res.status(500).json({ error: "Failed to restore backup" });
   }
 });
 
 // Delete backup
-app.delete("/api/backups/:name", (req, res) => {
+app.delete("/api/backups/:name", configRateLimit, (req, res) => {
   try {
     if (!BACKUP_NAME_RE.test(req.params.name)) return res.status(400).json({ error: "Invalid backup name" });
     const file = path.join(BACKUP_DIR, path.basename(req.params.name));
     if (fs.existsSync(file)) fs.unlinkSync(file);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Backup] delete error:", err.message);
+    res.status(500).json({ error: "Failed to delete backup" });
   }
 });
 
@@ -564,7 +572,7 @@ function validateImageMagic(buf, ext) {
   return false;
 }
 
-app.post("/api/wallpaper", express.json({ limit: "15mb" }), (req, res) => {
+app.post("/api/wallpaper", uploadRateLimit, express.json({ limit: "15mb" }), (req, res) => {
   try {
     const { name, data } = req.body; // name: "desktop.jpg", data: "base64string"
     if (!name || !data) return res.status(400).json({ error: "Missing name or data" });
@@ -603,7 +611,7 @@ app.post("/api/wallpaper", express.json({ limit: "15mb" }), (req, res) => {
 });
 
 // ── API: Delete wallpaper ────────────────────────────────────
-app.delete("/api/wallpaper/:name", (req, res) => {
+app.delete("/api/wallpaper/:name", configRateLimit, (req, res) => {
   try {
     const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const fp = path.join(WALLPAPER_DIR, safe);
@@ -619,7 +627,7 @@ app.delete("/api/wallpaper/:name", (req, res) => {
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB after decoding
 const IMAGE_ALLOWED_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
 
-app.post("/api/image", express.json({ limit: "15mb" }), (req, res) => {
+app.post("/api/image", uploadRateLimit, express.json({ limit: "15mb" }), (req, res) => {
   try {
     const { name, data } = req.body;
     if (!name || !data) return res.status(400).json({ error: "Missing name or data" });
@@ -652,7 +660,7 @@ app.post("/api/image", express.json({ limit: "15mb" }), (req, res) => {
 });
 
 // ── API: Delete image widget image ───────────────────────────
-app.delete("/api/image/:name", (req, res) => {
+app.delete("/api/image/:name", configRateLimit, (req, res) => {
   try {
     const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const fp = path.join(IMAGES_DIR, safe);
@@ -720,7 +728,7 @@ async function fetchIconsData() {
   return icons;
 }
 
-app.get("/api/icons", async (req, res) => {
+app.get("/api/icons", iconsRateLimit, async (req, res) => {
   try {
     if (iconsCache && Date.now() - iconsCacheTime < ICONS_CACHE_TTL) return res.json(iconsCache);
     res.json(await fetchIconsData());
@@ -731,7 +739,7 @@ app.get("/api/icons", async (req, res) => {
   }
 });
 
-app.get("/api/icons/:name/url", (req, res) => {
+app.get("/api/icons/:name/url", iconsRateLimit, (req, res) => {
   const name = req.params.name;
   // Only allow safe icon names: lowercase letters, digits, hyphens (matches dashboard-icons naming)
   if (!/^[a-z0-9-]+$/.test(name)) {
@@ -937,11 +945,13 @@ app.post("/api/integration/system", integrationRateLimit, express.json({ limit: 
     cpuPercent = Math.round(os.loadavg()[0] / cpus.length * 100);
   }
 
-  // Disk usage from / 
+  // Disk usage from /
   let disk = null;
   try {
-    const { execSync } = require("child_process");
-    const df = execSync("df -B1 / | tail -1", { encoding: "utf-8" }).trim().split(/\s+/);
+    const { execFileSync } = require("child_process");
+    // execFileSync avoids shell interpolation — args are passed directly, not through sh -c
+    const dfOut = execFileSync("df", ["-B1", "/"], { encoding: "utf-8" });
+    const df = dfOut.trim().split("\n").pop().trim().split(/\s+/);
     disk = { total: parseInt(df[1]), used: parseInt(df[2]), available: parseInt(df[3]), percent: parseInt(df[4]) };
   } catch {}
 
@@ -960,7 +970,7 @@ const weatherCache = new Map(); // "lat,lon:unit" -> { data, timestamp }
 const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 // Search endpoint: returns up to 5 geocoding candidates for disambiguation
-app.get("/api/weather/search", async (req, res) => {
+app.get("/api/weather/search", weatherRateLimit, async (req, res) => {
   const { q } = req.query;
   if (!q || q.trim().length < 2 || q.length > 200) return res.json([]);
   try {
@@ -987,7 +997,7 @@ app.get("/api/weather/search", async (req, res) => {
 });
 
 // Forecast endpoint: requires lat+lon (resolved at config time, no ambiguity)
-app.get("/api/weather", async (req, res) => {
+app.get("/api/weather", weatherRateLimit, async (req, res) => {
   const { lat, lon, city, unit = "celsius" } = req.query;
   if (!lat || !lon) return res.status(400).json({ error: "Missing lat/lon" });
   const latNum = parseFloat(lat), lonNum = parseFloat(lon);
