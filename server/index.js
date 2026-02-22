@@ -415,8 +415,23 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       return res.status(400).json({ error: "Invalid config: must be an object" });
     if (body.pages !== undefined && !Array.isArray(body.pages))
       return res.status(400).json({ error: "Invalid config: pages must be an array" });
-    writeConfig(body);
-    res.json({ ok: true });
+
+    // ── Conflict detection (version check) ───────────────────
+    // _v is a server-managed counter. If the client's _v doesn't match the
+    // stored _v, another device has saved in the meantime → reject with 409.
+    const current = readConfig();
+    const storedV = (current && current._v != null) ? current._v : 0;
+    const clientV = body._v != null ? Number(body._v) : null;
+    const force   = body._force === true;
+    if (!force && clientV !== null && clientV !== storedV) {
+      return res.status(409).json({ error: "conflict", serverVersion: storedV, yourVersion: clientV });
+    }
+    // Stamp the new version and strip internal-only fields
+    const toSave = Object.assign({}, body);
+    delete toSave._force;
+    toSave._v = storedV + 1;
+    writeConfig(toSave);
+    res.json({ ok: true, _v: toSave._v });
   } catch (err) {
     console.error("Error saving config:", err.message);
     res.status(500).json({ error: "Failed to save config" });

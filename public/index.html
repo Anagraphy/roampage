@@ -71,9 +71,11 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 .status-dot.up{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.38)}
 .status-dot.down{background:#ef4444;box-shadow:0 0 6px rgba(239,68,68,.38)}
 .status-dot.checking{background:#f59e0b;animation:pulse 1.5s infinite}
+.status-dot.degraded{background:#f97316;box-shadow:0 0 6px rgba(249,115,22,.38)}
 .status-label{font-size:11px;font-weight:600}
 .status-label.up{color:#22c55e}
 .status-label.down{color:#ef4444}.status-label.checking{color:#f59e0b}
+.status-label.degraded{color:#f97316}
 
 /* Popup */
 .overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);animation:fadeIn .15s ease}
@@ -137,13 +139,16 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 .drop-target-after::after{content:"";display:block;height:2px;background:#8b5cf6;margin-top:8px}
 /* Widgets */
 .widget{border-radius:12px;padding:16px;margin:8px 0}
-.widget-clock{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px}
+.widget-clock{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 .widget-clock .clock-time{font-size:48px;font-weight:800;color:#fff;letter-spacing:-1px;line-height:1}
 .widget-clock .clock-seconds{font-size:20px;font-weight:400;color:#64748b;margin-left:4px}
 .widget-clock .clock-date{font-size:13px;color:#94a3b8;margin-top:4px;font-weight:500;text-transform:uppercase;letter-spacing:1px}
 .widget-text{color:#cbd5e1;font-size:13px;line-height:1.6;padding:0;margin:4px 0}
 .widget-text a{color:#a78bfa;text-decoration:underline}
-.widget-text h1,.widget-text h2,.widget-text h3{color:#e2e8f0;margin:8px 0 4px}
+.widget-text h1,.widget-text h2,.widget-text h3{color:#e2e8f0;margin:8px 0 4px;font-weight:700}
+.widget-text h1,.pell-content h1{font-size:18px}
+.widget-text h2,.pell-content h2{font-size:15px}
+.widget-text h3,.pell-content h3{font-size:13px}
 .widget-text ul,.widget-text ol{padding-left:20px;margin:4px 0}
 .pell{border:1px solid rgba(255,255,255,.1);border-radius:8px;overflow:hidden;background:rgba(255,255,255,.03)}
 .pell-actionbar{background:rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.08);padding:4px}
@@ -189,7 +194,7 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 .widget-iframe{padding:0;overflow:hidden;border-radius:12px;border:1px solid rgba(255,255,255,.06)}
 .widget-iframe iframe{width:100%;border:none;display:block;background:transparent}
 /* Weather widget */
-.widget-weather{padding:14px 16px;display:flex;flex-direction:column;align-items:center}
+.widget-weather{padding:16px;display:flex;flex-direction:column;align-items:center}
 .weather-header{display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .weather-city{font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
 .weather-today{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.06)}
