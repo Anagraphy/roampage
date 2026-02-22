@@ -156,15 +156,11 @@ function saveConfig(){clearTimeout(saveTimeout);saveTimeout=setTimeout(async()=>
 // ═══════════════════════════════════════════════════════════════
 // HEALTH CHECKS (client-side, per URL)
 // ═══════════════════════════════════════════════════════════════
-async function checkUrl(url) {
-  // Check local cache first (5 min TTL)
-  const cached = healthCache[url];
-  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
-    return cached;
-  }
-
-  // Always use server relay: direct fetch with no-cors cannot read HTTP status,
-  // so a 500 or 404 would incorrectly appear as "up".
+// fetchFromServer always hits the server (which has its own 60s cache).
+// Used by the health loop so status actually refreshes every 60s.
+// Always use server relay: direct fetch with no-cors cannot read HTTP status,
+// so a 500 or 404 would incorrectly appear as "up".
+async function fetchFromServer(url) {
   try {
     const resp = await fetch(`/api/health?url=${encodeURIComponent(url)}`);
     const data = await resp.json();
@@ -181,6 +177,14 @@ async function checkUrl(url) {
   }
 }
 
+// checkUrl reads the localStorage cache (5 min TTL) — used only for
+// the initial display on page load before the health loop has run.
+async function checkUrl(url) {
+  const cached = healthCache[url];
+  if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) return cached;
+  return fetchFromServer(url);
+}
+
 async function runHealthChecks(){
   const urls=[];
   // Only check services on the current page to avoid generating excessive requests
@@ -189,10 +193,12 @@ async function runHealthChecks(){
   updateAllStatus();
   // Sequential checks with a short delay to avoid triggering CrowdSec / WAF
   // rate-limiting rules that fire on rapid bursts from the same IP.
+  // Always bypass the client cache — the server has its own 60s cache that
+  // prevents excessive TCP pings regardless of how often the client asks.
   for(const u of urls){
     healthByUrl[u]='checking';
     updateAllStatus();
-    const result=await checkUrl(u);
+    const result=await fetchFromServer(u);
     healthByUrl[u]=result.status;
     updateAllStatus();
     await new Promise(r=>setTimeout(r,800));
