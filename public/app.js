@@ -202,9 +202,8 @@ function getSvcStatus(svc){
   if(svc.type)return null; // widgets have no status
   const servers=(svc.servers||[]).filter(s=>s.url);
   if(!servers.length)return"checking";
-  // Up if ANY server is up; down only if all checked servers are down; partial if mixed
+  // Up if ANY server is up; down only if all checked servers are down
   const statuses=servers.map(s=>getServerStatus(s.url));
-  if(statuses.some(s=>s==="up")&&statuses.some(s=>s==="down"))return"partial";
   if(statuses.some(s=>s==="up"))return"up";
   if(statuses.every(s=>s==="down"))return"down";
   return"checking";
@@ -219,7 +218,7 @@ function updateAllStatus(){
     const id=el.dataset.healthSvc;
     for(const cat of page().categories){const svc=cat.services.find(s=>s.id===id);if(svc){
       const s=getSvcStatus(svc);const dot=el.querySelector(".status-dot"),lbl=el.querySelector(".status-label");
-      if(dot)dot.className="status-dot "+s;if(lbl){lbl.className="status-label "+s;lbl.textContent=s==="partial"?"":s;}
+      if(dot)dot.className="status-dot "+s;if(lbl){lbl.className="status-label "+s;lbl.textContent=s;}
       break;
     }}
   });
@@ -250,8 +249,7 @@ function renderTag(t){return`<span class="tag" style="background:${getTagColor(t
 function renderSvcStatus(svc){
   const status = getSvcStatus(svc);
   if(!status)return"";
-  const label=status==="partial"?"":status;
-  return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span>${label?`<span class="status-label ${status}">${label}</span>`:""}</div>`;
+  return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span><span class="status-label ${status}">${status}</span></div>`;
 }
 
 function renderClockWidget(svc){
