@@ -8,9 +8,10 @@ const net = require("net");
 
 const app = express();
 app.disable("x-powered-by"); // Don't advertise the tech stack
-// Trust reverse proxies (Pangolin, Nginx, Traefik…) so req.ip reflects the real
-// client IP rather than the proxy's IP, keeping per-client rate limiting accurate.
-app.set("trust proxy", true);
+// Trust exactly one reverse proxy (Pangolin, Nginx, Traefik…) so req.ip reflects
+// the real client IP. Using "1" (not true) prevents arbitrary X-Forwarded-For
+// spoofing that would otherwise bypass per-client rate limiting.
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = process.env.CONFIG_PATH || "/data/config.json";
 const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
@@ -329,7 +330,8 @@ app.use("/images", (req, res, next) => {
 }, express.static(IMAGES_DIR));
 
 // ── Health check ─────────────────────────────────────────────
-app.get("/health", (req, res) => {
+const internalHealthLimit = makeRateLimiter(60 * 1000, 10); // 10 req/min (Docker checks 2×/min)
+app.get("/health", internalHealthLimit, (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
@@ -630,11 +632,14 @@ app.post("/api/wallpaper", uploadRateLimit, express.json({ limit: "15mb" }), (re
       return res.status(400).json({ error: "File content does not match declared format" });
     }
 
-    // Sanitize filename
+    // Sanitize filename + path confinement guard
     const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const dest = path.resolve(WALLPAPER_DIR, safe);
+    if (!dest.startsWith(path.resolve(WALLPAPER_DIR) + path.sep))
+      return res.status(400).json({ error: "Invalid filename" });
     if (!fs.existsSync(WALLPAPER_DIR)) fs.mkdirSync(WALLPAPER_DIR, { recursive: true });
 
-    fs.writeFileSync(path.join(WALLPAPER_DIR, safe), buf);
+    fs.writeFileSync(dest, buf);
 
     res.json({ ok: true, url: "/wallpapers/" + safe });
   } catch (err) {
@@ -647,7 +652,9 @@ app.post("/api/wallpaper", uploadRateLimit, express.json({ limit: "15mb" }), (re
 app.delete("/api/wallpaper/:name", configRateLimit, (req, res) => {
   try {
     const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const fp = path.join(WALLPAPER_DIR, safe);
+    const fp = path.resolve(WALLPAPER_DIR, safe);
+    if (!fp.startsWith(path.resolve(WALLPAPER_DIR) + path.sep))
+      return res.status(400).json({ error: "Invalid filename" });
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
     res.json({ ok: true });
   } catch (err) {
@@ -682,9 +689,12 @@ app.post("/api/image", uploadRateLimit, express.json({ limit: "15mb" }), (req, r
     }
 
     const safe = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const dest = path.resolve(IMAGES_DIR, safe);
+    if (!dest.startsWith(path.resolve(IMAGES_DIR) + path.sep))
+      return res.status(400).json({ error: "Invalid filename" });
     if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
-    fs.writeFileSync(path.join(IMAGES_DIR, safe), buf);
+    fs.writeFileSync(dest, buf);
     res.json({ ok: true, url: "/images/" + safe });
   } catch (err) {
     console.error("Image upload error:", err.message);
@@ -696,7 +706,9 @@ app.post("/api/image", uploadRateLimit, express.json({ limit: "15mb" }), (req, r
 app.delete("/api/image/:name", configRateLimit, (req, res) => {
   try {
     const safe = req.params.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const fp = path.join(IMAGES_DIR, safe);
+    const fp = path.resolve(IMAGES_DIR, safe);
+    if (!fp.startsWith(path.resolve(IMAGES_DIR) + path.sep))
+      return res.status(400).json({ error: "Invalid filename" });
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
     res.json({ ok: true });
   } catch (err) {
@@ -1065,6 +1077,12 @@ app.get("/api/weather", weatherRateLimit, async (req, res) => {
     res.status(502).json({ error: e.message });
   }
 });
+
+// ── 404 for unknown /api/ routes ─────────────────────────────
+// Must be placed before the SPA fallback so API typos return JSON,
+// not index.html (which could mislead API clients into thinking a
+// request succeeded).
+app.use("/api", (req, res) => res.status(404).json({ error: "API endpoint not found" }));
 
 // ── SPA fallback ─────────────────────────────────────────────
 app.get("*", (req, res) => {

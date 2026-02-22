@@ -580,6 +580,9 @@ function renderWallpaperEditor(){
 
 function applyWallpaper(){
   const p=page();let url=p.wallpaperDesktop||"";
+  // Restrict to known-safe origins: local uploads or data URIs.
+  // Rejects arbitrary strings that could be used for CSS injection.
+  if(url&&!/^(\/wallpapers\/|\/images\/|data:image\/)/.test(url))url="";
   const body=document.body;
   const shell=document.getElementById("shell");
   const layer=document.getElementById("wp-layer");
