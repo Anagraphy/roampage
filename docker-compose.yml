@@ -9,6 +9,12 @@ services:
     #   ENCRYPTION_KEY: "none"  # or a 64-char hex key — see README
     volumes:
       - ./data:/data
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   newt:
