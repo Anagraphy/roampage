@@ -34,6 +34,7 @@ const DEFAULT_CONFIG = {
 
 const DEFAULT_TAG_COLORS=["#8b5cf6","#10b981","#6b7280","#f59e0b","#3b82f6","#ec4899","#ef4444","#06b6d4","#f97316","#84cc16"];
 let config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+let configVersion=null;
 let editMode=false, columns=2, popupService=null, jsonModal="", jsonText="", jsonLoading=false, saveTimeout=null;
 let backupModal=false, backups=[];
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
@@ -129,6 +130,7 @@ function compressImage(file,maxWidth,maxHeight,quality){
 // ═══════════════════════════════════════════════════════════════
 async function loadConfig(){
   try{const res=await fetch("/api/config");const data=await res.json();
+    if(data&&data._version)configVersion=data._version;
     if(data&&data.pages)config=data;
     else if(data&&data.categories){config={currentPage:0,pages:[data]};} // migrate old format
   }catch(e){}
@@ -148,7 +150,7 @@ async function loadConfig(){
   }
   render();startHealthLoop();pushPageUrl();
 }
-function saveConfig(){clearTimeout(saveTimeout);saveTimeout=setTimeout(async()=>{try{await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(config)})}catch(e){}},500);}
+function saveConfig(){clearTimeout(saveTimeout);saveTimeout=setTimeout(async()=>{try{const headers={"Content-Type":"application/json"};if(configVersion!=null)headers["If-Match"]=String(configVersion);const res=await fetch("/api/config",{method:"POST",headers,body:JSON.stringify(config)});if(res.status===409){const data=await res.json();configVersion=data.version;fetch("/api/config").then(r=>r.json()).then(d=>{if(d&&d._version)configVersion=d._version;if(d&&d.pages){config=d;render();}const t=document.createElement("div");t.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e2030;border:1px solid rgba(245,158,11,.4);color:#fbbf24;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5)";t.textContent="Configuration modifiée sur un autre appareil — rechargé.";document.body.appendChild(t);setTimeout(()=>t.remove(),4000);}).catch(()=>{});}else if(res.ok){const d=await res.json();if(d&&d._version)configVersion=d._version;}}catch(e){}},500);}
 
 // ═══════════════════════════════════════════════════════════════
 // HEALTH CHECKS (client-side, per URL)
@@ -200,8 +202,9 @@ function getSvcStatus(svc){
   if(svc.type)return null; // widgets have no status
   const servers=(svc.servers||[]).filter(s=>s.url);
   if(!servers.length)return"checking";
-  // Up if ANY server is up; down only if all checked servers are down
+  // Up if ANY server is up; down only if all checked servers are down; partial if mixed
   const statuses=servers.map(s=>getServerStatus(s.url));
+  if(statuses.some(s=>s==="up")&&statuses.some(s=>s==="down"))return"partial";
   if(statuses.some(s=>s==="up"))return"up";
   if(statuses.every(s=>s==="down"))return"down";
   return"checking";
@@ -216,7 +219,7 @@ function updateAllStatus(){
     const id=el.dataset.healthSvc;
     for(const cat of page().categories){const svc=cat.services.find(s=>s.id===id);if(svc){
       const s=getSvcStatus(svc);const dot=el.querySelector(".status-dot"),lbl=el.querySelector(".status-label");
-      if(dot)dot.className="status-dot "+s;if(lbl){lbl.className="status-label "+s;lbl.textContent=s;}
+      if(dot)dot.className="status-dot "+s;if(lbl){lbl.className="status-label "+s;lbl.textContent=s==="partial"?"":s;}
       break;
     }}
   });
@@ -247,7 +250,8 @@ function renderTag(t){return`<span class="tag" style="background:${getTagColor(t
 function renderSvcStatus(svc){
   const status = getSvcStatus(svc);
   if(!status)return"";
-  return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span><span class="status-label ${status}">${status}</span></div>`;
+  const label=status==="partial"?"":status;
+  return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span>${label?`<span class="status-label ${status}">${label}</span>`:""}</div>`;
 }
 
 function renderClockWidget(svc){
@@ -305,7 +309,7 @@ function renderWeatherWidget(svc){
     const name=DAYS[new Date(day.date).getDay()];
     return`<div class="weather-day"><span class="weather-day-name">${name}</span><span class="weather-day-icon">${di}</span><span class="weather-day-temp">${Math.round(day.temp_max)}${unit}</span><span class="weather-day-min">${Math.round(day.temp_min)}${unit}</span></div>`;
   }).join("");
-  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-header"><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div><div class="weather-today"><span class="weather-today-icon">${icon}</span><div class="weather-today-info"><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span></div></div><div class="weather-forecast">${forecast}</div></div>`;
+  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-today"><span class="weather-today-icon">${icon}</span><div class="weather-today-info"><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div></div><div class="weather-forecast">${forecast}</div></div>`;
 }
 function renderIframeWidget(svc){
   if(!svc.iframeUrl)return`<div class="widget widget-iframe" style="padding:16px"><div style="color:#64748b;font-size:12px;text-align:center">No URL set</div></div>`;
@@ -441,6 +445,15 @@ function initHomeTextWidgets(){
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
     editor.content.innerHTML=DOMPurify.sanitize(svc.content||"<em>Click to edit...</em>");
+    // Strip inline styles on paste to preserve font consistency
+    editor.content.addEventListener("paste",function(e){
+      e.preventDefault();
+      const html=e.clipboardData.getData("text/html");
+      if(html){
+        const clean=DOMPurify.sanitize(html,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
+        document.execCommand("insertHTML",false,clean);
+      }else{document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));}
+    });
     // Force dynamic height - remove any inline/inherited min-height
     editor.content.style.minHeight="0";
     editor.content.style.height="auto";
@@ -574,6 +587,11 @@ function applyWallpaper(){
   const gradient="linear-gradient(to bottom,rgba(15,18,25,0.5) 0%,rgba(15,18,25,0.5) 20%,rgba(15,18,25,0.6) 40%,rgba(15,18,25,0.75) 55%,rgba(15,18,25,0.88) 70%,rgba(15,18,25,0.95) 80%,#0f1219 90%)";
   // Clear legacy body inline background
   body.style.backgroundImage="";body.style.backgroundSize="";body.style.backgroundPosition="";body.style.backgroundRepeat="";body.style.backgroundAttachment="";body.style.backgroundColor="#0f1219";
+  // On mobile, inset:0 (bottom:0) causes the layer to resize when the address bar
+  // shows/hides, producing a visible zoom/jump. height:100vh is the stable large
+  // viewport value on iOS — it does NOT change with the address bar.
+  if(isMobile()){layer.style.height="100vh";layer.style.bottom="auto";}
+  else{layer.style.height="";layer.style.bottom="0";}
   if(url){
     if(url.startsWith("/wallpapers/")&&!url.includes("?t="))url+=("?t="+Date.now());
     const isPortrait=p.wallpaperFit==="contain";
@@ -640,6 +658,15 @@ function initPellEditors(){
       actions:["bold","italic","underline","strikethrough","heading1","heading2","olist","ulist","link"]
     });
     editor.content.innerHTML=DOMPurify.sanitize(svc.content||"");
+    // Strip inline styles on paste to preserve font consistency
+    editor.content.addEventListener("paste",function(e){
+      e.preventDefault();
+      const html=e.clipboardData.getData("text/html");
+      if(html){
+        const clean=DOMPurify.sanitize(html,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
+        document.execCommand("insertHTML",false,clean);
+      }else{document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));}
+    });
   });
 }
 
@@ -766,7 +793,7 @@ function render(){
     if(ec===2&&cats.length>1){const mid=Math.ceil(cats.length/2);gc=`<div>${cats.slice(0,mid).map(renderCategory).join("")}</div><div>${cats.slice(mid).map(renderCategory).join("")}</div>`;}
     else{gc=`<div>${cats.map(renderCategory).join("")}</div>`;}
     const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/></svg>${columns} col</button>`;
-    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div>`;
+    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint"><span>middle-click</span> opens first link</div>`;
   }
 
   app.innerHTML=`<div class="header"><div class="header-left"><img src="/logo.png" class="header-logo" alt="Roampage"><h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
@@ -994,7 +1021,7 @@ document.addEventListener("click",e=>{
           // Re-enable the button immediately so the user can interact again
           btn.disabled=false;btn.style.opacity="1";
           // Refresh integration data after a delay to let Jellyfin settle
-          setTimeout(()=>{integCurrentPage=-1;startIntegrations();},1500);
+          setTimeout(()=>{integDataCache.delete(integId);integCurrentPage=-1;startIntegrations();},1500);
         })
         .catch(e=>{
           console.error("Play/pause failed:",e);
@@ -1349,7 +1376,8 @@ document.addEventListener("blur",e=>{const el=e.target;
 },true);
 
 loadConfig();
-window.addEventListener("resize",()=>{if(page()&&page().wallpaperDesktop)applyWallpaper();});
+let _lastWallpaperWidth=window.innerWidth;
+window.addEventListener("resize",()=>{const w=window.innerWidth;if(w!==_lastWallpaperWidth){_lastWallpaperWidth=w;if(page()&&page().wallpaperDesktop)applyWallpaper();}});
 
 // Pause all background polling when the tab is hidden to avoid generating
 // excessive requests that could trigger CrowdSec (or other IDS/IPS) rate-limiting
@@ -1359,6 +1387,12 @@ document.addEventListener("visibilitychange",()=>{
     stopHealthLoop();
     stopIntegrations();
   } else {
+    if(!editMode){
+      fetch("/api/config").then(r=>r.json()).then(data=>{
+        if(data&&data._version)configVersion=data._version;
+        if(data&&data.pages){config=data;render();}
+      }).catch(()=>{});
+    }
     startHealthLoop();
     if(page())startIntegrations();
   }

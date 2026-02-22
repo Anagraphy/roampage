@@ -19,6 +19,9 @@ const IMAGES_DIR = path.join(path.dirname(CONFIG_PATH), "images");
 const healthCache = new Map();
 const HEALTH_CACHE_TTL = 60 * 1000; // 60 seconds
 
+// Config version for conflict detection (multi-browser persistence)
+let configVersion = Date.now();
+
 // Bounded cache helper — evicts oldest entry (FIFO) when limit is reached
 function cacheSet(map, key, value, max) {
   if (map.size >= max) map.delete(map.keys().next().value);
@@ -396,7 +399,9 @@ app.get("/api/health", healthRateLimit, async (req, res) => {
 // the reverse-proxy layer. Consider using Authelia or similar before exposing.
 app.get("/api/config", configRateLimit, (req, res) => {
   try {
-    res.json(readConfig());
+    const data = readConfig();
+    if (data && typeof data === "object") data._version = configVersion;
+    res.json(data);
   } catch (err) {
     console.error("Error reading config:", err.message);
     res.status(500).json({ error: "Failed to read config" });
@@ -411,8 +416,14 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       return res.status(400).json({ error: "Invalid config: must be an object" });
     if (body.pages !== undefined && !Array.isArray(body.pages))
       return res.status(400).json({ error: "Invalid config: pages must be an array" });
+    // Conflict detection: if client sends If-Match, check against current version
+    const ifMatch = req.headers["if-match"];
+    if (ifMatch !== undefined && ifMatch !== String(configVersion)) {
+      return res.status(409).json({ error: "conflict", version: configVersion });
+    }
     writeConfig(body);
-    res.json({ ok: true });
+    configVersion = Date.now();
+    res.json({ ok: true, _version: configVersion });
   } catch (err) {
     console.error("Error saving config:", err.message);
     res.status(500).json({ error: "Failed to save config" });
@@ -436,6 +447,19 @@ app.get("/api/config/download", configRateLimit, (req, res) => {
 const BACKUP_DIR = path.join(path.dirname(CONFIG_PATH), "backups");
 const MAX_BACKUPS = 10;
 
+function stripBase64ForBackup(data) {
+  const c = JSON.parse(JSON.stringify(data));
+  for (const cat of c.categories || []) {
+    for (const svc of cat.services || []) {
+      if (svc.imageUrl && svc.imageUrl.startsWith("data:")) svc.imageUrl = "";
+      if (svc.wallpaperDesktopData) delete svc.wallpaperDesktopData;
+      if (svc.imageUrlData) delete svc.imageUrlData;
+    }
+  }
+  if (c.wallpaperDesktop && c.wallpaperDesktop.startsWith("data:")) c.wallpaperDesktop = "";
+  return c;
+}
+
 function createBackup(label, pageData, pageSlug) {
   if (!pageData) return null;
   if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -444,7 +468,8 @@ function createBackup(label, pageData, pageSlug) {
   const slug = (pageSlug || "page").replace(/[^a-z0-9-]/g, "");
   const name = `${slug}-${label}-${ts}.json`;
   const dest = path.join(BACKUP_DIR, name);
-  fs.writeFileSync(dest, encryptConfig(JSON.stringify(pageData, null, 2)), "utf-8");
+  const cleanData = stripBase64ForBackup(pageData);
+  fs.writeFileSync(dest, encryptConfig(JSON.stringify(cleanData)), "utf-8");
   // Prune old backups for this page slug (keep MAX_BACKUPS)
   const prefix = slug + "-";
   const files = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith(prefix) && f.endsWith(".json")).sort().reverse();
