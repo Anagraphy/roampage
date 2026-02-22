@@ -90,7 +90,8 @@ function slugify(s){return(s||"").toLowerCase().normalize("NFD").replace(/[\u030
 function pageSlug(pg){return pg.slug||slugify(pg.title);}
 function findPageBySlug(slug){if(!slug||slug==="/")return 0;slug=slug.replace(/^\//,"");const i=config.pages.findIndex(p=>pageSlug(p)===slug);return i>=0?i:0;}
 function pushPageUrl(){const slug=pageSlug(page());history.replaceState(null,"","/"+slug);}
-window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(location.pathname);render();startHealthLoop();});
+function shellScrollTop(){const sh=document.getElementById("shell");if(sh)sh.scrollTop=0;}
+window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(location.pathname);render();shellScrollTop();startHealthLoop();});
 function getTagColor(t){const p=page();return p.tags&&p.tags[t]?p.tags[t]:"#6b7280";}
 function getAllTags(){const p=page();return p.tags?Object.keys(p.tags):[];}
 
@@ -954,7 +955,7 @@ document.addEventListener("click",e=>{
     case"toggle-cols":columns=columns===1?2:1;render();break;
 
     // Pages
-    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;saveConfig();render();startHealthLoop();pushPageUrl();break;
+    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
     case"add-page":config.pages.push(EMPTY_PAGE());config.currentPage=config.pages.length-1;editMode=true;openSvcBodies.clear();saveConfig();render();break;
     case"del-page":if(config.pages.length>1){config.pages.splice(pi,1);if(config.currentPage>=config.pages.length)config.currentPage=config.pages.length-1;saveConfig();render();}break;
 
