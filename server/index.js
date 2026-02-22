@@ -4,9 +4,13 @@ const path = require("path");
 const morgan = require("morgan");
 const crypto = require("crypto");
 const dns = require("dns").promises;
+const net = require("net");
 
 const app = express();
 app.disable("x-powered-by"); // Don't advertise the tech stack
+// Trust reverse proxies (Pangolin, Nginx, Traefik…) so req.ip reflects the real
+// client IP rather than the proxy's IP, keeping per-client rate limiting accurate.
+app.set("trust proxy", true);
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = process.env.CONFIG_PATH || "/data/config.json";
 const WALLPAPER_DIR = path.join(path.dirname(CONFIG_PATH), "wallpapers");
@@ -50,7 +54,7 @@ function makeRateLimiter(windowMs, max) {
 const healthRateLimit = makeRateLimiter(60 * 1000, 120);     // 120 req/min per IP
 const integrationRateLimit = makeRateLimiter(60 * 1000, 60); // 60 req/min per IP
 const configRateLimit = makeRateLimiter(60 * 1000, 30);      //  30 req/min per IP
-const uploadRateLimit = makeRateLimiter(60 * 1000, 10);      //  10 uploads/min per IP
+const uploadRateLimit = makeRateLimiter(60 * 1000, 60);      //  60 uploads/min per IP (bulk import needs headroom)
 const weatherRateLimit = makeRateLimiter(60 * 1000, 30);     //  30 req/min per IP
 const iconsRateLimit = makeRateLimiter(60 * 1000, 60);       //  60 req/min per IP
 
@@ -333,12 +337,28 @@ app.get("/api/version", versionRateLimit, (req, res) => {
   res.json({ version });
 });
 
+// ── Health check helper (TCP port check) ─────────────────────
+// A raw TCP connection is used instead of an HTTP request so that:
+//  1. Self-signed TLS certificates never cause false "down" results
+//  2. Services that return 401/403 (Proxmox, Grafana…) are correctly "up"
+//  3. No HTTP payload is sent → CrowdSec / WAF HTTP rules are not triggered
+// If the TCP handshake succeeds the port is open and the service is reachable.
+function tcpPing(hostname, port, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: hostname, port: parseInt(port, 10) });
+    const timer = setTimeout(() => { socket.destroy(); reject(new Error("timeout")); }, timeoutMs);
+    socket.on("connect", () => { clearTimeout(timer); socket.destroy(); resolve(); });
+    socket.on("error", (err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
 // ── API: Health check proxy ───────────────────────────────────
 app.get("/api/health", healthRateLimit, async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "Missing url" });
+  let parsed;
   try {
-    const parsed = validateUrl(url);
+    parsed = validateUrl(url);
     await checkDnsResolution(parsed.hostname);
   } catch (e) { return res.status(400).json({ error: e.message }); }
 
@@ -350,42 +370,18 @@ app.get("/api/health", healthRateLimit, async (req, res) => {
     }
   }
 
-  let timeout;
+  const port = parsed.port || (parsed.protocol === "https:" ? 443 : 80);
   try {
-    const controller = new AbortController();
-    timeout = setTimeout(() => controller.abort(), 3000); // 3 seconds max
-    
-    let response;
-    try {
-      // Try HEAD first
-      response = await fetch(url, {
-        method: 'HEAD',
-        signal: controller.signal,
-        redirect: 'manual'
-      });
-    } catch (headError) {
-      // Fallback to GET if HEAD fails (some services don't support HEAD)
-      response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-        redirect: 'manual'
-      });
-    }
-    
-    clearTimeout(timeout);
-    
-    // Consider 2xx and 3xx as "up", anything else as "down"
-    const status = response.status < 400 ? 'up' : 'down';
+    await tcpPing(parsed.hostname, port, 3000);
     const prev = healthCache.get(url)?.status;
-    if (prev && prev !== status) console.log(`[Health] ${safeHost(url)} → ${status} (was ${prev})`);
-    cacheSet(healthCache, url, { status, timestamp: now }, 200);
-    res.json({ status });
+    if (prev && prev !== "up") console.log(`[Health] ${safeHost(url)} → up (was ${prev})`);
+    cacheSet(healthCache, url, { status: "up", timestamp: now }, 200);
+    res.json({ status: "up" });
   } catch (e) {
-    clearTimeout(timeout);
     const prev = healthCache.get(url)?.status;
-    if (prev !== 'down') console.log(`[Health] ${safeHost(url)} → down`);
-    cacheSet(healthCache, url, { status: 'down', timestamp: now }, 200);
-    res.json({ status: 'down' });
+    if (prev !== "down") console.log(`[Health] ${safeHost(url)} → down (${e.message})`);
+    cacheSet(healthCache, url, { status: "down", timestamp: now }, 200);
+    res.json({ status: "down" });
   }
 });
 
@@ -415,23 +411,8 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       return res.status(400).json({ error: "Invalid config: must be an object" });
     if (body.pages !== undefined && !Array.isArray(body.pages))
       return res.status(400).json({ error: "Invalid config: pages must be an array" });
-
-    // ── Conflict detection (version check) ───────────────────
-    // _v is a server-managed counter. If the client's _v doesn't match the
-    // stored _v, another device has saved in the meantime → reject with 409.
-    const current = readConfig();
-    const storedV = (current && current._v != null) ? current._v : 0;
-    const clientV = body._v != null ? Number(body._v) : null;
-    const force   = body._force === true;
-    if (!force && clientV !== null && clientV !== storedV) {
-      return res.status(409).json({ error: "conflict", serverVersion: storedV, yourVersion: clientV });
-    }
-    // Stamp the new version and strip internal-only fields
-    const toSave = Object.assign({}, body);
-    delete toSave._force;
-    toSave._v = storedV + 1;
-    writeConfig(toSave);
-    res.json({ ok: true, _v: toSave._v });
+    writeConfig(body);
+    res.json({ ok: true });
   } catch (err) {
     console.error("Error saving config:", err.message);
     res.status(500).json({ error: "Failed to save config" });

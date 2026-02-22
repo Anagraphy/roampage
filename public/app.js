@@ -34,8 +34,7 @@ const DEFAULT_CONFIG = {
 
 const DEFAULT_TAG_COLORS=["#8b5cf6","#10b981","#6b7280","#f59e0b","#3b82f6","#ec4899","#ef4444","#06b6d4","#f97316","#84cc16"];
 let config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-let configVersion=0; // tracks the _v version we last loaded/saved from server
-let editMode=false, columns=2, popupService=null, jsonModal="", jsonText="", saveTimeout=null;
+let editMode=false, columns=2, popupService=null, jsonModal="", jsonText="", jsonLoading=false, saveTimeout=null;
 let backupModal=false, backups=[];
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
 let widgetPickerCat=-1; // -1 = hidden, >=0 = category index
@@ -130,8 +129,8 @@ function compressImage(file,maxWidth,maxHeight,quality){
 // ═══════════════════════════════════════════════════════════════
 async function loadConfig(){
   try{const res=await fetch("/api/config");const data=await res.json();
-    if(data&&data.pages){config=data;configVersion=data._v||0;}
-    else if(data&&data.categories){config={currentPage:0,pages:[data]};configVersion=0;} // migrate old format
+    if(data&&data.pages)config=data;
+    else if(data&&data.categories){config={currentPage:0,pages:[data]};} // migrate old format
   }catch(e){}
   if(!config.pages||!config.pages.length)config.pages=[EMPTY_PAGE()];
   if(config.currentPage>=config.pages.length)config.currentPage=0;
@@ -149,34 +148,7 @@ async function loadConfig(){
   }
   render();startHealthLoop();pushPageUrl();
 }
-function showConflictBanner(){
-  if(document.getElementById("conflict-banner"))return;
-  const b=document.createElement("div");
-  b.id="conflict-banner";
-  b.style.cssText="position:fixed;bottom:0;left:0;right:0;background:#7c2d12;color:#fef2f2;padding:10px 16px;font-size:12px;z-index:9999;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap";
-  b.innerHTML='<span>⚠ Config modified on another device — your changes were not saved.</span><button id="cb-reload" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🔄 Discard &amp; reload</button><button id="cb-force" style="background:rgba(239,68,68,.3);border:1px solid rgba(239,68,68,.5);color:#fca5a5;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">💾 Overwrite server</button>';
-  document.body.appendChild(b);
-  document.getElementById("cb-reload").onclick=()=>window.location.reload();
-  document.getElementById("cb-force").onclick=async()=>{
-    b.remove();
-    try{
-      const payload=Object.assign({},config,{_v:configVersion,_force:true});
-      const res=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-      const d=await res.json();if(d._v)configVersion=d._v;
-    }catch(e){}
-  };
-}
-function saveConfig(){
-  clearTimeout(saveTimeout);
-  saveTimeout=setTimeout(async()=>{
-    try{
-      const payload=Object.assign({},config,{_v:configVersion});
-      const res=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-      if(res.status===409){showConflictBanner();return;}
-      const d=await res.json();if(d._v)configVersion=d._v;
-    }catch(e){}
-  },500);
-}
+function saveConfig(){clearTimeout(saveTimeout);saveTimeout=setTimeout(async()=>{try{await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(config)})}catch(e){}},500);}
 
 // ═══════════════════════════════════════════════════════════════
 // HEALTH CHECKS (client-side, per URL)
@@ -207,28 +179,31 @@ async function checkUrl(url) {
 }
 
 async function runHealthChecks(){
-  const urls=new Set();
-  for(const p of config.pages)for(const cat of p.categories)for(const svc of cat.services)for(const srv of svc.servers||[])if(srv.url){const u=autoPrefix(srv.url);urls.add(u);if(!healthByUrl[u])healthByUrl[u]="checking";}
+  const urls=[];
+  // Only check services on the current page to avoid generating excessive requests
+  // (checking all pages at once would trigger CrowdSec rate-limiting rules)
+  for(const cat of page().categories)for(const svc of cat.services)for(const srv of svc.servers||[])if(srv.url){const u=autoPrefix(srv.url);if(!urls.includes(u))urls.push(u);if(!healthByUrl[u])healthByUrl[u]="checking";}
   updateAllStatus();
-  await Promise.all([...urls].map(async u=>{
-    healthByUrl[u] = 'checking';
+  // Sequential checks with a short delay to avoid triggering CrowdSec / WAF
+  // rate-limiting rules that fire on rapid bursts from the same IP.
+  for(const u of urls){
+    healthByUrl[u]='checking';
     updateAllStatus();
-    const result = await checkUrl(u);
-    healthByUrl[u] = result.status;
+    const result=await checkUrl(u);
+    healthByUrl[u]=result.status;
     updateAllStatus();
-  }));
+    await new Promise(r=>setTimeout(r,800));
+  }
 }
 function getServerStatus(url){return healthByUrl[autoPrefix(url)]||"checking";}
 function getSvcStatus(svc){
   if(svc.type)return null; // widgets have no status
-  if(!svc.servers||!svc.servers.length)return"checking";
-  const statuses=svc.servers.filter(s=>s.url).map(s=>getServerStatus(s.url));
-  if(!statuses.length)return"checking";
-  const hasUp=statuses.some(s=>s==="up");
-  const hasDown=statuses.some(s=>s==="down");
-  if(hasUp&&hasDown)return"degraded"; // some up, some down → orange
-  if(hasUp)return"up";
-  if(hasDown)return"down";
+  const servers=(svc.servers||[]).filter(s=>s.url);
+  if(!servers.length)return"checking";
+  // Up if ANY server is up; down only if all checked servers are down
+  const statuses=servers.map(s=>getServerStatus(s.url));
+  if(statuses.some(s=>s==="up"))return"up";
+  if(statuses.every(s=>s==="down"))return"down";
   return"checking";
 }
 function updateAllStatus(){
@@ -247,6 +222,7 @@ function updateAllStatus(){
   });
 }
 function startHealthLoop(){if(healthInterval)clearInterval(healthInterval);runHealthChecks();healthInterval=setInterval(runHealthChecks,60000);}
+function stopHealthLoop(){if(healthInterval){clearInterval(healthInterval);healthInterval=null;}}
 
 // ═══════════════════════════════════════════════════════════════
 // ICON BROWSER
@@ -448,6 +424,7 @@ function startIntegrations(){
   // weather is cached server-side for 30 min so fetching every 30s is fine (no extra API calls).
   integInterval=setInterval(fetchAll,30*1000);
 }
+function stopIntegrations(){if(integInterval){clearInterval(integInterval);integInterval=null;}}
 
 function initHomeTextWidgets(){
   document.querySelectorAll(".pell-home-wrap").forEach(container=>{
@@ -546,7 +523,7 @@ function renderPopup(svc){
   }).join("");
   return`<div class="overlay" id="popup-overlay"><div class="popup"><div class="popup-header"><img class="popup-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><div><div class="popup-title">${h(svc.name)}</div><div class="popup-sub">Choose a server</div></div></div>${choices}</div></div>`;
 }
-function renderJsonModal(){if(!jsonModal)return"";const p=page();const ts=(()=>{const d=new Date();const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"_"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());})();
+function renderJsonModal(){if(!jsonModal&&!jsonLoading)return"";if(jsonLoading)return`<div class="overlay" id="json-overlay"><div class="json-modal" style="align-items:center;justify-content:center;text-align:center;gap:16px"><div style="font-size:28px">⏳</div><div style="color:#e2e8f0;font-size:14px;margin-top:8px">Processing…</div></div></div>`;const p=page();const ts=(()=>{const d=new Date();const pad=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"_"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());})();
   // ── Scope picker (first step) ────────────────────────────────
   if(jsonModal==="pick-export"||jsonModal==="pick-import"){
     const isExp=jsonModal==="pick-export";
@@ -570,7 +547,7 @@ function renderBackupModal(){
     const d=new Date(b.date);
     const label=b.name.includes("-auto-")?"🔄 Auto":b.name.includes("-manual-")?"💾 Manual":b.name.includes("-pre-restore-")?"🔙 Pre-restore":"📄 Backup";
     const dateStr=d.toLocaleDateString([],{day:"numeric",month:"short",year:"numeric"})+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    const size=b.size>=1024*1024?(b.size/(1024*1024)).toFixed(2)+"MB":(b.size/1024).toFixed(1)+"KB";
+    const size=(b.size/1024).toFixed(1)+"KB";
     return`<div class="integ-row"><span class="name">${label} <span style="color:#64748b;font-size:11px">${dateStr}</span></span><span class="meta">${size}</span><button class="btn-small" style="padding:2px 8px;font-size:10px" data-action="restore-backup" data-name="${h(b.name)}">Restore</button><button class="icon-btn danger" style="padding:2px 4px" data-action="delete-backup" data-name="${h(b.name)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;
   }).join(""):`<div style="color:#64748b;font-size:12px;text-align:center;padding:12px">No backups yet</div>`;
   return`<div class="overlay" id="backup-overlay"><div class="json-modal"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700;color:#e2e8f0">📦 Backups — ${h(page().title||"Page")}</span><span style="font-size:11px;color:#64748b">Auto every Sunday 3AM</span></div><div style="font-size:11px;color:#64748b;margin-bottom:8px">Backups are per-page, not global.</div><div class="integ-list" style="max-height:300px;overflow-y:auto">${list}</div><div class="json-actions"><button class="btn-small" data-action="backup-close">Close</button><button class="btn-small" style="background:rgba(34,197,94,.2);border-color:rgba(34,197,94,.4);color:#22c55e" data-action="backup-now">💾 Backup now</button></div></div></div>`;
@@ -595,9 +572,8 @@ function applyWallpaper(){
   const shell=document.getElementById("shell");
   const layer=document.getElementById("wp-layer");
   const gradient="linear-gradient(to bottom,rgba(15,18,25,0.5) 0%,rgba(15,18,25,0.5) 20%,rgba(15,18,25,0.6) 40%,rgba(15,18,25,0.75) 55%,rgba(15,18,25,0.88) 70%,rgba(15,18,25,0.95) 80%,#0f1219 90%)";
-  // Clear all inline backgrounds
+  // Clear legacy body inline background
   body.style.backgroundImage="";body.style.backgroundSize="";body.style.backgroundPosition="";body.style.backgroundRepeat="";body.style.backgroundAttachment="";body.style.backgroundColor="#0f1219";
-  layer.style.display="none";layer.innerHTML="";
   if(url){
     if(url.startsWith("/wallpapers/")&&!url.includes("?t="))url+=("?t="+Date.now());
     const isPortrait=p.wallpaperFit==="contain";
@@ -606,41 +582,31 @@ function applyWallpaper(){
     // Use DOM API (not innerHTML) so that a crafted wallpaperDesktop URL in an
     // imported JSON cannot inject HTML attributes (e.g. " onmouseover="…").
     const safeUrl=url.replace(/'/g,"%27");
-    const bgPos=useBlur?"center":"top center";
-    if(isMobile()){
-      // On mobile (iOS/Android), position:fixed jumps when the browser chrome
-      // shows/hides during scroll. Use body background-attachment:scroll instead.
-      body.style.backgroundImage=`${gradient},url('${safeUrl}')`;
-      body.style.backgroundSize=`auto,cover`;
-      body.style.backgroundPosition=`top,${bgPos}`;
-      body.style.backgroundRepeat="no-repeat,no-repeat";
-      body.style.backgroundAttachment="scroll,scroll";
-      body.style.backgroundColor="transparent";
+    layer.innerHTML="";
+    const imgDiv=document.createElement("div");
+    if(useBlur){
+      imgDiv.style.cssText="position:absolute;inset:-40px;filter:blur(5px) brightness(0.85)";
+      imgDiv.style.backgroundImage=`url('${safeUrl}')`;
+      imgDiv.style.backgroundPosition="center";
+      imgDiv.style.backgroundSize="cover";
+      imgDiv.style.backgroundRepeat="no-repeat";
     }else{
-      // Desktop: fixed layer with gradient overlay
-      const imgDiv=document.createElement("div");
-      if(useBlur){
-        imgDiv.style.cssText="position:absolute;inset:-40px;filter:blur(5px) brightness(0.85)";
-        imgDiv.style.backgroundImage=`url('${safeUrl}')`;
-        imgDiv.style.backgroundPosition="center";
-        imgDiv.style.backgroundSize="cover";
-        imgDiv.style.backgroundRepeat="no-repeat";
-      }else{
-        imgDiv.style.cssText="position:absolute;inset:0";
-        imgDiv.style.backgroundImage=`url('${safeUrl}')`;
-        imgDiv.style.backgroundPosition=bgPos;
-        imgDiv.style.backgroundSize="cover";
-        imgDiv.style.backgroundRepeat="no-repeat";
-      }
-      const gradDiv=document.createElement("div");
-      gradDiv.style.cssText=`position:absolute;inset:0;background:${gradient}`;
-      layer.appendChild(imgDiv);
-      layer.appendChild(gradDiv);
-      layer.style.display="block";
+      imgDiv.style.cssText="position:absolute;inset:0";
+      imgDiv.style.backgroundImage=`url('${safeUrl}')`;
+      imgDiv.style.backgroundPosition="top center";
+      imgDiv.style.backgroundSize="cover";
+      imgDiv.style.backgroundRepeat="no-repeat";
     }
+    const gradDiv=document.createElement("div");
+    gradDiv.style.cssText=`position:absolute;inset:0;background:${gradient}`;
+    layer.appendChild(imgDiv);
+    layer.appendChild(gradDiv);
+    layer.style.display="block";
     shell.style.background="transparent";
     shell.style.zIndex="1";
   }else{
+    layer.style.display="none";
+    layer.innerHTML="";
     shell.style.background="";
     shell.style.zIndex="";
   }
@@ -794,13 +760,13 @@ function render(){
     const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
     body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
   } else if(!p.categories.length){
-    body=`<div class="empty-page">Click on <strong>Config</strong> in the top right to get started!</div>`;
+    body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
     const cats=p.categories;let gc;
     if(ec===2&&cats.length>1){const mid=Math.ceil(cats.length/2);gc=`<div>${cats.slice(0,mid).map(renderCategory).join("")}</div><div>${cats.slice(mid).map(renderCategory).join("")}</div>`;}
     else{gc=`<div>${cats.map(renderCategory).join("")}</div>`;}
     const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/></svg>${columns} col</button>`;
-    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">Services with <span>×N</span> show a server picker · Middle-click opens the first link directly</div>`;
+    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div>`;
   }
 
   app.innerHTML=`<div class="header"><div class="header-left"><img src="/logo.png" class="header-logo" alt="Roampage"><h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
@@ -863,14 +829,17 @@ async function _fetchToB64(url){
   const blob=await r.blob();
   return new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob);});
 }
-async function _uploadB64(name,data){
-  const r=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data})});
-  const d=await r.json();return d.url||null;
+async function _uploadWithRetry(endpoint,name,data){
+  for(let attempt=0;attempt<4;attempt++){
+    if(attempt>0)await new Promise(r=>setTimeout(r,attempt*1500));
+    const r=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data})});
+    if(r.status===429)continue;
+    const d=await r.json();return d.url||null;
+  }
+  return null;
 }
-async function _uploadImageB64(name,data){
-  const r=await fetch("/api/image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data})});
-  const d=await r.json();return d.url||null;
-}
+async function _uploadB64(name,data){return _uploadWithRetry("/api/wallpaper",name,data);}
+async function _uploadImageB64(name,data){return _uploadWithRetry("/api/image",name,data);}
 // Embed all local images (wallpaper + widget imageUrl) into the page object for export/backup
 async function _embedLocalImages(pg){
   // wallpaper
@@ -905,36 +874,40 @@ async function _restoreLocalImages(pg){
 }
 async function doJsonExport(){
   const p=page();const exp=JSON.parse(JSON.stringify(p));
-  await _embedLocalImages(exp);
+  jsonLoading=true;render();
+  try{await _embedLocalImages(exp);}finally{jsonLoading=false;}
   jsonText=JSON.stringify(exp,null,2);jsonModal="export";render();
 }
 async function doJsonExportAll(){
   const expAll=JSON.parse(JSON.stringify(config));
-  for(const pg of expAll.pages)await _embedLocalImages(pg);
+  jsonLoading=true;render();
+  try{for(const pg of expAll.pages)await _embedLocalImages(pg);}finally{jsonLoading=false;}
   jsonText=JSON.stringify(expAll,null,2);jsonModal="export-all";render();
 }
 async function doJsonImport(){
   try{
     const ta=$("#json-text");const c=JSON.parse(ta.value);
     if(c.categories===undefined)throw 0;
-    await _restoreLocalImages(c);
+    jsonLoading=true;render();
+    try{await _restoreLocalImages(c);}finally{jsonLoading=false;}
     config.pages[config.currentPage]=c;jsonModal="";saveConfig();render();
-  }catch{const err=$("#json-error");if(err)err.textContent="Invalid JSON — expected a single page object";}
+  }catch{jsonLoading=false;const err=$("#json-error");if(err)err.textContent="Invalid JSON — expected a single page object";}
 }
 async function doJsonImportAll(){
   try{
     const ta=$("#json-text");const c=JSON.parse(ta.value);
     if(!(c.pages&&Array.isArray(c.pages)&&c.pages.length))throw 0;
-    for(const pg of c.pages)await _restoreLocalImages(pg);
+    jsonLoading=true;render();
+    try{for(const pg of c.pages)await _restoreLocalImages(pg);}finally{jsonLoading=false;}
     config=c;jsonModal="";saveConfig();render();
-  }catch{const err=$("#json-error");if(err)err.textContent="Invalid JSON — expected a full config object with pages";}
+  }catch{jsonLoading=false;const err=$("#json-error");if(err)err.textContent="Invalid JSON — expected a full config object with pages";}
 }
 
 document.addEventListener("click",e=>{
   const btn=e.target.closest("[data-action]");
   if(!btn){
     if(e.target.id==="popup-overlay"){popupService=null;render();}
-    if(e.target.id==="json-overlay"){jsonModal="";render();}
+    if(e.target.id==="json-overlay"&&!jsonLoading){jsonModal="";render();}
     if(e.target.id==="icon-browser-overlay"){iconBrowserOpen=false;iconBrowserSearch="";bmIconTarget=null;render();}
     if(e.target.id==="widget-picker-overlay"){widgetPickerCat=-1;render();}
     if(e.target.id==="backup-overlay"){backupModal=false;render();}
@@ -1010,20 +983,24 @@ document.addEventListener("click",e=>{
       let svc=null;
       for(const pg of config.pages)for(const cat of pg.categories)for(const s of cat.services)if(s.id===integId){svc=s;break;}
       if(!svc)break;
-      // Optimistic UI: instantly flip the button — no disable, UI is immediately responsive
+      // Optimistic UI: instantly flip the button to the opposite state
       const nowPausing=cmd==="Pause";
       btn.dataset.cmd=nowPausing?"Unpause":"Pause";
       btn.title=nowPausing?"Play":"Pause";
       btn.textContent=nowPausing?"▶":"⏸";
-      // Fire-and-forget: button stays active, refresh state after Jellyfin settles
+      btn.disabled=true;btn.style.opacity="0.5";
       fetch("/api/integration/jellyfin/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:svc.integUrl,apiKey:svc.integApiKey,sessionId,command:cmd})})
         .then(()=>{
+          // Re-enable the button immediately so the user can interact again
+          btn.disabled=false;btn.style.opacity="1";
+          // Refresh integration data after a delay to let Jellyfin settle
           setTimeout(()=>{integCurrentPage=-1;startIntegrations();},1500);
         })
         .catch(e=>{
           console.error("Play/pause failed:",e);
           // Revert optimistic update on failure
           btn.dataset.cmd=cmd;btn.title=nowPausing?"Pause":"Play";btn.textContent=nowPausing?"⏸":"▶";
+          btn.disabled=false;btn.style.opacity="1";
         });
       break;
     }
@@ -1088,22 +1065,16 @@ document.addEventListener("click",e=>{
     // Backups (per-page)
     case"open-backups":{const slug=pageSlug(p);fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r=>r.json()).then(d=>{backups=d;backupModal=true;render();}).catch(()=>{backupModal=true;render();});break;}
     case"backup-close":backupModal=false;render();break;
-    case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));// Wallpaper/image files persist on the server independently — no need to embed
-      fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});})();break;}
-    case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"?\n\nA snapshot of the current page will be saved first (visible in the backup list as 🔙 Pre-restore), so you can undo if needed."))break;
+    case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});})();break;}
+    case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"?"))break;
       (async()=>{
-        const slug=pageSlug(p);const pre=JSON.parse(JSON.stringify(p));await _embedLocalImages(pre);
-        await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:pre,slug:slug+"-pre-restore"})});
         const r=await fetch("/api/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
         const d=await r.json();
         if(d.page){await _restoreLocalImages(d.page);config.pages[config.currentPage]=d.page;saveConfig();render();}
         else{
-          // Show user-friendly error — common cause: backup was encrypted with a different key
           const msg=d&&d.error?d.error:"Unknown server error";
           const isKeyErr=/unable to authenticate|unsupported state|decipher/i.test(msg);
           alert("⚠ Restore failed"+(isKeyErr?"\n\nThis backup was encrypted with a different key (e.g. from a previous container run).\nSet a fixed ENCRYPTION_KEY in your docker-compose.yml to avoid this.":"\n\n"+msg));
-          // Refresh backup list so the pre-restore snapshot is visible
-          fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r2=>r2.json()).then(list=>{backups=list;render();}).catch(()=>{});
         }
       })();break;}
     case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
@@ -1379,5 +1350,18 @@ document.addEventListener("blur",e=>{const el=e.target;
 
 loadConfig();
 window.addEventListener("resize",()=>{if(page()&&page().wallpaperDesktop)applyWallpaper();});
+
+// Pause all background polling when the tab is hidden to avoid generating
+// excessive requests that could trigger CrowdSec (or other IDS/IPS) rate-limiting
+// rules when the dashboard is exposed through a reverse proxy such as Pangolin.
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    stopHealthLoop();
+    stopIntegrations();
+  } else {
+    startHealthLoop();
+    if(page())startIntegrations();
+  }
+});
 
 fetch("/api/version").then(r=>r.json()).then(d=>{const f=document.getElementById("app-footer");if(f)f.textContent="roampage v"+d.version;}).catch(()=>{});
