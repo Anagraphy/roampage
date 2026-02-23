@@ -314,7 +314,7 @@ function renderWeatherWidget(svc){
     const name=DAYS[new Date(day.date).getDay()];
     return`<div class="weather-day"><span class="weather-day-name">${name}</span><span class="weather-day-icon">${di}</span><span class="weather-day-temp">${Math.round(day.temp_max)}${unit}</span><span class="weather-day-min">${Math.round(day.temp_min)}${unit}</span></div>`;
   }).join("");
-  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-today"><span class="weather-today-icon">${icon}</span><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span></div><div class="weather-today-sub"><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div><div class="weather-forecast">${forecast}</div></div>`;
+  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-today"><span class="weather-today-icon">${icon}</span><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div><div class="weather-forecast">${forecast}</div></div>`;
 }
 function renderIframeWidget(svc){
   if(!svc.iframeUrl)return`<div class="widget widget-iframe" style="padding:16px"><div style="color:#64748b;font-size:12px;text-align:center">No URL set</div></div>`;
