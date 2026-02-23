@@ -816,13 +816,13 @@ async function proxyFetch(url, headers = {}, timeout = 5000) {
   }
 }
 
-function cachedProxy(key, fetcher) {
+function cachedProxy(key, fetcher, ttl = INTEGRATION_CACHE_TTL) {
   return async (req, res) => {
     const cacheKey = key + ":" + (req.body?.url || req.query?.url || "");
     const now = Date.now();
     if (integrationCache.has(cacheKey)) {
       const { data, timestamp } = integrationCache.get(cacheKey);
-      if (now - timestamp < INTEGRATION_CACHE_TTL) return res.json(data);
+      if (now - timestamp < ttl) return res.json(data);
     }
     try {
       const data = await fetcher(req);
@@ -835,7 +835,7 @@ function cachedProxy(key, fetcher) {
   };
 }
 
-// Jellyfin: currently playing sessions
+// Jellyfin: currently playing sessions (short cache for fast playback detection)
 app.post("/api/integration/jellyfin", integrationRateLimit, express.json({ limit: "2kb" }), cachedProxy("jellyfin", async (req) => {
   const { url, apiKey } = req.body;
   if (!url || !apiKey) throw new Error("Missing url or apiKey");
@@ -873,7 +873,7 @@ app.post("/api/integration/jellyfin", integrationRateLimit, express.json({ limit
     device: s.DeviceName,
     sessionId: s.Id,
   }));
-}));
+}, 8 * 1000)); // 8s cache — faster playback detection vs default 30s
 
 // Jellyfin: play/pause control
 app.post("/api/integration/jellyfin/command", integrationRateLimit, express.json({ limit: "2kb" }), async (req, res) => {

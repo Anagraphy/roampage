@@ -25,7 +25,7 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 @media(max-width:700px){.container{padding:20px 16px 40px}}
 /* Mobile scroll lock: body is fixed, #shell scrolls — prevents position:fixed
    elements (wallpaper layer) from drifting during iOS elastic/rubber-band scroll */
-@media(max-width:700px){body{overflow:hidden}#shell{height:100vh;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}}
+@media(max-width:700px){body{overflow:hidden}#shell{height:100vh;height:100dvh;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain}}
 
 /* Header */
 .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:12px}
@@ -195,11 +195,11 @@ html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-ap
 .widget-weather{padding:20px 16px;display:flex;flex-direction:column;align-items:center}
 .weather-header{display:flex;align-items:center;justify-content:center;margin-bottom:4px}
 .weather-city{font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
-.weather-today{display:flex;align-items:flex-start;justify-content:center;gap:12px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.weather-today{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
 .weather-today-icon{font-size:42px;line-height:1}
-.weather-today-info{display:flex;flex-direction:column}
 .weather-today-temp{font-size:32px;font-weight:800;color:#fff;line-height:1}
-.weather-today-desc{font-size:11px;color:#94a3b8;margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.weather-today-sub{display:flex;flex-direction:column;align-items:center;width:100%;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.weather-today-desc{font-size:11px;color:#94a3b8;margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px}
 .weather-forecast{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;width:100%}
 .weather-day{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;min-width:36px;padding:6px 4px;border-radius:8px;background:rgba(255,255,255,.03)}
 .weather-day-name{font-size:9px;color:#64748b;font-weight:600;text-transform:uppercase}

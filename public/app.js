@@ -314,7 +314,7 @@ function renderWeatherWidget(svc){
     const name=DAYS[new Date(day.date).getDay()];
     return`<div class="weather-day"><span class="weather-day-name">${name}</span><span class="weather-day-icon">${di}</span><span class="weather-day-temp">${Math.round(day.temp_max)}${unit}</span><span class="weather-day-min">${Math.round(day.temp_min)}${unit}</span></div>`;
   }).join("");
-  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-today"><span class="weather-today-icon">${icon}</span><div class="weather-today-info"><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div></div><div class="weather-forecast">${forecast}</div></div>`;
+  return`<div class="widget widget-weather" id="weather-${h(svc.id)}"><div class="weather-today"><span class="weather-today-icon">${icon}</span><span class="weather-today-temp">${Math.round(today.temp_max)}${unit}</span></div><div class="weather-today-sub"><span class="weather-today-desc">${label} · ${Math.round(today.temp_min)}${unit} min</span><span class="weather-city">📍 ${h(d.city||svc.weatherCity)}</span></div><div class="weather-forecast">${forecast}</div></div>`;
 }
 function renderIframeWidget(svc){
   if(!svc.iframeUrl)return`<div class="widget widget-iframe" style="padding:16px"><div style="color:#64748b;font-size:12px;text-align:center">No URL set</div></div>`;
@@ -369,7 +369,7 @@ function renderIntegrationData(el,type,data){
 let integInterval=null;
 let integCurrentPage=-1; // tracks which page integrations are running for
 const integDataCache=new Map(); // id → {data, type, ts}
-const INTEG_CLIENT_TTL=25*1000; // reuse cached data if fresher than 25s
+const INTEG_CLIENT_TTL=8*1000; // reuse cached data if fresher than 8s
 
 // Repaint integration widgets from client cache (instant, no network)
 function repaintIntegrations(){
@@ -430,8 +430,8 @@ function startIntegrations(){
   integCurrentPage=config.currentPage;
   fetchAll();
   // Integration widgets (jellyfin/pihole/system) need frequent refresh;
-  // weather is cached server-side for 30 min so fetching every 30s is fine (no extra API calls).
-  integInterval=setInterval(fetchAll,30*1000);
+  // weather is cached server-side for 30 min so fetching every 10s is fine (no extra API calls).
+  integInterval=setInterval(fetchAll,10*1000);
 }
 function stopIntegrations(){if(integInterval){clearInterval(integInterval);integInterval=null;}}
 
@@ -455,9 +455,18 @@ function initHomeTextWidgets(){
       e.preventDefault();
       const html=e.clipboardData.getData("text/html");
       if(html){
-        const clean=DOMPurify.sanitize(html,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
-        document.execCommand("insertHTML",false,clean);
-      }else{document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));}
+        // Convert block-level closing tags to <br> BEFORE sanitizing,
+        // so line breaks survive even when <div>/<p> wrappers are stripped
+        const prepped=html.replace(/<\/(p|div|li|tr|h[1-6])>/gi,"<br>");
+        const clean=DOMPurify.sanitize(prepped,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
+        // Trim leading/trailing <br> artifacts
+        const trimmed=clean.replace(/^(<br\s*\/?>\s*)+|(<br\s*\/?>\s*)+$/gi,"");
+        document.execCommand("insertHTML",false,trimmed);
+      }else{
+        const text=e.clipboardData.getData("text/plain");
+        const escaped=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        document.execCommand("insertHTML",false,escaped.replace(/\n/g,"<br>"));
+      }
     });
     // Force dynamic height - remove any inline/inherited min-height
     editor.content.style.minHeight="0";
@@ -671,9 +680,15 @@ function initPellEditors(){
       e.preventDefault();
       const html=e.clipboardData.getData("text/html");
       if(html){
-        const clean=DOMPurify.sanitize(html,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
-        document.execCommand("insertHTML",false,clean);
-      }else{document.execCommand("insertText",false,e.clipboardData.getData("text/plain"));}
+        const prepped=html.replace(/<\/(p|div|li|tr|h[1-6])>/gi,"<br>");
+        const clean=DOMPurify.sanitize(prepped,{ALLOWED_TAGS:["b","i","u","s","strong","em","h1","h2","h3","ul","ol","li","a","br","p"],ALLOWED_ATTR:["href"]});
+        const trimmed=clean.replace(/^(<br\s*\/?>\s*)+|(<br\s*\/?>\s*)+$/gi,"");
+        document.execCommand("insertHTML",false,trimmed);
+      }else{
+        const text=e.clipboardData.getData("text/plain");
+        const escaped=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        document.execCommand("insertHTML",false,escaped.replace(/\n/g,"<br>"));
+      }
     });
   });
 }
