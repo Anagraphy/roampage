@@ -246,7 +246,7 @@ function renderWidgetPicker(){
   const ci=widgetPickerCat;
   const w=(type,icon,name,desc)=>`<button class="widget-type-btn" data-action="add-widget" data-wtype="${type}" data-cat="${ci}"><span class="widget-type-icon">${icon}</span><div><div style="font-weight:600">${name}</div><div style="font-size:11px;color:#94a3b8">${desc}</div></div></button>`;
   const ig=(itype,icon,name,desc)=>`<button class="widget-type-btn" data-action="add-integration" data-itype="${itype}" data-cat="${ci}"><span class="widget-type-icon">${icon}</span><div><div style="font-weight:600">${name}</div><div style="font-size:11px;color:#94a3b8">${desc}</div></div></button>`;
-  return`<div class="overlay" id="widget-picker-overlay"><div class="popup" style="min-width:320px;max-height:80vh;overflow-y:auto"><div style="font-weight:700;color:#e2e8f0;font-size:15px;margin-bottom:12px">Widgets</div><div style="display:flex;flex-direction:column;gap:6px">${w("widget-clock","🕐","Clock","Time and date display")}${w("widget-weather","🌤","Weather","7-day forecast by city")}${w("widget-bookmarks","🔗","Bookmarks","Quick links grid")}${w("widget-text","📝","Text","Rich text with formatting")}${w("widget-image","🖼","Image","Display an image or banner")}${w("widget-iframe","🪟","Iframe","Embed an external page")}${w("widget-countdown","⏳","Countdown","Countdown to a date")}${w("widget-separator","➖","Separator","Divider line with optional label")}</div><div style="font-weight:700;color:#e2e8f0;font-size:15px;margin:16px 0 12px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px">Integrations</div><div style="display:flex;flex-direction:column;gap:6px">${ig("jellyfin","🎬","Jellyfin","Currently playing")}${ig("pihole","🛡","Pi-hole","DNS blocking stats")}${ig("system","💻","System","CPU, RAM, Disk usage")}</div></div></div>`;
+  return`<div class="overlay" id="widget-picker-overlay"><div class="popup" style="min-width:320px;max-height:80vh;overflow-y:auto"><div style="font-weight:700;color:#e2e8f0;font-size:15px;margin-bottom:12px">Widgets</div><div style="display:flex;flex-direction:column;gap:6px">${w("widget-clock","🕐","Clock","Time and date display")}${w("widget-weather","🌤","Weather","7-day forecast by city")}${w("widget-bookmarks","🔗","Bookmarks","Quick links grid")}${w("widget-text","📝","Text","Rich text with formatting")}${w("widget-image","🖼","Image","Display an image or banner")}${w("widget-iframe","🪟","Iframe","Embed an external page")}${w("widget-countdown","⏳","Countdown","Countdown to a date")}${w("widget-separator","➖","Separator","Divider line with optional label")}</div><div style="font-weight:700;color:#e2e8f0;font-size:15px;margin:16px 0 12px;border-top:1px solid rgba(255,255,255,.08);padding-top:16px">Integrations</div><div style="display:flex;flex-direction:column;gap:6px">${ig("system","💻","System","CPU, RAM, Disk usage")}</div></div></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -332,7 +332,7 @@ function renderIntegrationWidget(svc){
   return`<div class="widget widget-integration" id="integ-${h(svc.id)}" data-integ-type="${h(svc.integType)}" data-integ-id="${h(svc.id)}"><div class="integ-header"><span class="integ-icon">${integIcons[svc.integType]||"📊"}</span><span class="integ-title">${h(svc.integLabel||svc.integType)}</span></div><div class="integ-body"><span class="integ-loading">Loading...</span></div></div>`;
 }
 
-const integIcons={jellyfin:"🎬",pihole:"🛡",system:"💻"};
+const integIcons={system:"💻"};
 
 function formatBytes(b){if(!b)return"0 B";const u=["B","KB","MB","GB","TB"];const i=Math.floor(Math.log(b)/Math.log(1024));return(b/Math.pow(1024,i)).toFixed(i>1?1:0)+" "+u[i];}
 function formatUptime(s){const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60);return d>0?`${d}d ${h}h`:h>0?`${h}h ${m}m`:`${m}m`;}
@@ -341,24 +341,7 @@ function renderIntegrationData(el,type,data){
   const body=el.querySelector(".integ-body");if(!body)return;
   if(data.error){body.innerHTML=`<span class="integ-error">⚠ ${h(data.error)}</span>`;return;}
 
-  if(type==="jellyfin"){
-    if(!data.length){body.innerHTML=`<span class="integ-loading">No active sessions</span>`;return;}
-    body.innerHTML=`<div class="integ-list">${data.map(s=>{
-      const isPlaying=s.state==="playing";const isPaused=s.state==="paused";
-      const badge=isPlaying?'<span class="badge-up">▶</span>':isPaused?'<span class="badge-paused">⏸</span>':'<span class="meta">💤</span>';
-      const title=s.state==="idle"?`<span style="color:#64748b">${h(s.device||"Idle")}</span>`:h(s.series?s.series+" — "+s.title:s.title);
-      const ctrl=(isPlaying||isPaused)?`<button class="integ-ctrl-btn" data-action="jf-playpause" data-integ-id="${el.dataset.integId}" data-session="${h(s.sessionId)}" data-cmd="${isPlaying?"Pause":"Unpause"}" title="${isPlaying?"Pause":"Play"}">${isPlaying?"⏸":"▶"}</button>`:"";
-      return`<div class="integ-row"><span class="name">${title}</span><span class="meta">${h(s.user)}</span>${ctrl}${badge}</div>`;
-    }).join("")}</div>`;
-  }
-
-  else if(type==="pihole"){
-    const pct=data.percent_blocked||0;
-    const color=pct>30?"#ef4444":pct>15?"#f59e0b":"#22c55e";
-    body.innerHTML=`<div class="integ-stats"><div class="integ-stat"><span class="stat-val">${(data.queries_today||0).toLocaleString()}</span><span class="stat-label">Queries</span></div><div class="integ-stat"><span class="stat-val">${(data.blocked_today||0).toLocaleString()}</span><span class="stat-label">Blocked</span></div><div class="integ-stat"><span class="stat-val" style="color:${color}">${pct.toFixed(1)}%</span><span class="stat-label">Filtered</span></div></div><div class="integ-bar"><div class="integ-bar-fill" style="width:${pct}%;background:${color}"></div></div>`;
-  }
-
-  else if(type==="system"){
+  if(type==="system"){
     const cpuPct=data.cpu?.percent||0;const memPct=data.memory?.percent||0;const diskPct=data.disk?.percent||0;
     const barColor=(v)=>v>85?"#ef4444":v>60?"#f59e0b":"#22c55e";
     const bar=(label,pct,detail)=>`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:#94a3b8;font-weight:600">${label}</span><span style="color:#64748b">${detail}</span></div><div class="integ-bar"><div class="integ-bar-fill" style="width:${pct}%;background:${barColor(pct)}"></div></div></div>`;
@@ -429,7 +412,7 @@ function startIntegrations(){
   }
   integCurrentPage=config.currentPage;
   fetchAll();
-  // Integration widgets (jellyfin/pihole/system) need frequent refresh;
+  // Integration widgets need frequent refresh;
   // weather is cached server-side for 30 min so fetching every 10s is fine (no extra API calls).
   integInterval=setInterval(fetchAll,10*1000);
 }
@@ -732,14 +715,7 @@ function renderEditWidgetIntegration(svc,ci,si,total){
   const isOpen=openSvcBodies.has(`${ci}-${si}`);
   const icon=integIcons[svc.integType]||"📊";
   const name=svc.integType?svc.integType.charAt(0).toUpperCase()+svc.integType.slice(1):"Integration";
-  const needsUrl=svc.integType!=="system";
-  const needsKey=["jellyfin","pihole"].includes(svc.integType);
-  const keyLabel=svc.integType==="pihole"?"Password (or App Password)":"API Key";
-  const keyPlaceholder=svc.integType==="pihole"?"Your Pi-hole password":"Your API key";
-  const urlPlaceholder=`http://192.168.1.x:port`;
-  let fields=`<div><label class="edit-label">Label (optional)</label><input class="edit-input" value="${h(svc.integLabel||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="integLabel" placeholder="${name}"></div>`;
-  if(needsUrl)fields+=`<div><label class="edit-label">${name} URL</label><input class="edit-input" value="${h(svc.integUrl||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="integUrl" placeholder="${urlPlaceholder}"></div>`;
-  if(needsKey)fields+=`<div><label class="edit-label">${keyLabel}</label><input class="edit-input" type="password" value="${h(svc.integApiKey||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="integApiKey" placeholder="${keyPlaceholder}"></div>`;
+  const fields=`<div><label class="edit-label">Label (optional)</label><input class="edit-input" value="${h(svc.integLabel||"")}" data-action="edit-widget-field" data-cat="${ci}" data-svc="${si}" data-field="integLabel" placeholder="${name}"></div>`;
   return`<div class="edit-svc"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><span style="font-size:18px">${icon}</span><span class="edit-svc-name">${name}</span><div style="display:flex;gap:4px">${widgetMoveButtons(ci,si,total)}</div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron${isOpen?" open":""}" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:${isOpen?"flex":"none"}">${fields}</div></div>`;
 }
 
@@ -1028,33 +1004,6 @@ document.addEventListener("click",e=>{
       p.categories[cat].services.push({id:"wgt_"+uid(),type:"widget-integration",integType:itype,integLabel:"",integUrl:"",integApiKey:""});
       widgetPickerCat=-1;saveConfig();render();break;
     }
-    case"jf-playpause":{
-      const integId=btn.dataset.integId;const sessionId=btn.dataset.session;const cmd=btn.dataset.cmd;
-      let svc=null;
-      for(const pg of config.pages)for(const cat of pg.categories)for(const s of cat.services)if(s.id===integId){svc=s;break;}
-      if(!svc)break;
-      // Optimistic UI: instantly flip the button to the opposite state
-      const nowPausing=cmd==="Pause";
-      btn.dataset.cmd=nowPausing?"Unpause":"Pause";
-      btn.title=nowPausing?"Play":"Pause";
-      btn.textContent=nowPausing?"▶":"⏸";
-      btn.disabled=true;btn.style.opacity="0.5";
-      fetch("/api/integration/jellyfin/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:svc.integUrl,apiKey:svc.integApiKey,sessionId,command:cmd})})
-        .then(()=>{
-          // Re-enable the button immediately so the user can interact again
-          btn.disabled=false;btn.style.opacity="1";
-          // Refresh integration data after a delay to let Jellyfin settle
-          setTimeout(()=>{integDataCache.delete(integId);integCurrentPage=-1;startIntegrations();},1500);
-        })
-        .catch(e=>{
-          console.error("Play/pause failed:",e);
-          // Revert optimistic update on failure
-          btn.dataset.cmd=cmd;btn.title=nowPausing?"Pause":"Play";btn.textContent=nowPausing?"⏸":"▶";
-          btn.disabled=false;btn.style.opacity="1";
-        });
-      break;
-    }
-
     // Servers
     case"add-server":p.categories[ci].services[si].servers.push({label:`Server ${p.categories[ci].services[si].servers.length+1}`,url:""});saveConfig();render();reopenSvc(ci,si);break;
     case"del-server":p.categories[ci].services[si].servers.splice(sri,1);saveConfig();render();reopenSvc(ci,si);break;
