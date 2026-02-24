@@ -1,5 +1,6 @@
 # 🚐 Roampage
 A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
+
 ## Features
 - **Responsive** — Works on desktop and mobile
 - **Inline editing** — Click "Config" to add/edit/remove categories, services, servers
@@ -13,16 +14,72 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **Import/Export** — Backup and restore your config as JSON, with download/upload file support
 - **Auto URL prefix** — IP addresses automatically get `http://`, domains get `https://`
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
+
 > **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
 
-## Quick Start
+## Installation
+
+### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your machine.
+
+### Step by step
+
+**1. Create a folder for Roampage and navigate into it:**
+```bash
+mkdir roampage && cd roampage
+```
+
+**2. Create the `docker-compose.yml` file:**
+```bash
+nano docker-compose.yml
+```
+
+Paste the following content, then save with `Ctrl+O`, `Enter`, and exit with `Ctrl+X`:
+```yaml
+services:
+  roampage:
+    image: ghcr.io/anagraphy/roampage:latest
+    container_name: roampage
+    ports:
+      - "3046:3000"
+    volumes:
+      - roampage_data:/data
+    restart: unless-stopped
+
+volumes:
+  roampage_data:
+```
+
+**3. Start the container:**
 ```bash
 docker compose up -d
 ```
-Open `http://localhost:3046` and click **Config** to set up your services.
+
+**4. Open your browser and go to:**
+```
+http://localhost:3046
+```
+
+Click **Config** in the top-right corner to start adding your services.
+
+---
+
+### Build from source
+
+If you prefer to build the image yourself instead of pulling it:
+
+```bash
+git clone https://github.com/Anagraphy/roampage.git
+cd roampage
+docker compose up -d --build
+```
+
 ## Configuration
+
 All configuration is done through the web UI. Click the **Config** button in the top-right corner.
-You can also manually edit the config file at the mounted volume path `/data/config.json` inside the container).
+
+You can also manually edit the config file at the mounted volume path `/data/config.json` inside the container.
+
 ### Environment Variables
 | Variable | Default | Description |
 |---|---|---|
@@ -41,34 +98,25 @@ Config and backups are encrypted at rest with AES-256-GCM. Three modes are avail
 | `"none"` | Encryption disabled — config and backups stored as plain JSON. Backups are always restorable; no key to manage. |
 
 > **Migration note:** switching from encrypted to `none` (or vice-versa) requires exporting your config from the UI first, then deleting `data/config.json` and any old backups before restarting with the new mode.
-### Default docker-compose.yml
-```yaml
-services:
-  roampage:
-    build: .
-    container_name: roampage
-    ports:
-      - "3046:3000"
-    volumes:
-      - roampage_data:/data
-    restart: unless-stopped
-volumes:
-  roampage_data:
-```
+
 ### Custom port
 ```yaml
 ports:
   - "8080:3000"
 ```
+
 ### Bind mount instead of named volume
 ```yaml
 volumes:
-  - ./config:/data
+  - ./data:/data
 ```
+
 ## Data
 - **Config** is stored at `/data/config.json`
 - **Wallpapers** are stored at `/data/wallpapers/`
+
 Both are persisted via the Docker volume.
+
 ## Security
 
 ### Security model
