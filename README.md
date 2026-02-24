@@ -2,18 +2,33 @@
 A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
 
 ## Features
+
+### Dashboard
 - **Responsive** — Works on desktop and mobile
-- **Inline editing** — Click "Config" to add/edit/remove categories, services, servers
-- **Multi-server support** — Tap a service with multiple servers to choose which one to open
+- **Inline editing** — Click "Config" to add, edit and reorder categories, services and servers directly from the browser
+- **Multi-server support** — Click a service with multiple servers to pick which one to open
 - **Multi-page** — Create multiple pages, each with their own categories, services, tags and wallpaper
-- **Live health checks** — Client-side pings show real-time up/down status for each service and server
+- **Live health checks** — Real-time up/down status for each service and server, with per-server indicators in the selector
+- **Search** — Filter services instantly by name or description (`Ctrl+K`)
+- **Column toggle** — Switch between 1 and 2 column layout on desktop
 - **Custom tags** — Create, rename, recolor and delete tags with a built-in color picker
 - **Wallpaper** — Upload a background image per page with automatic compression and smooth gradient fade
 - **Icon browser** — Browse and search 2500+ icons from dashboardicons.com directly in the editor
-- **Persistent config** — Saved to a JSON file via Docker volume
-- **Import/Export** — Backup and restore your config as JSON, with download/upload file support
 - **Auto URL prefix** — IP addresses automatically get `http://`, domains get `https://`
+- **Encrypted config** — Configuration and backups are encrypted at rest with AES-256-GCM
+- **Import/Export** — Export and import your full config as JSON, with embedded images
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
+
+### Widgets
+- **Clock** — Real-time clock with date display
+- **Weather** — 7-day forecast by city, powered by Open-Meteo (no API key required)
+- **Bookmarks** — Quick links grid with icons and custom labels
+- **Text** — Rich text editor with formatting (bold, italic, lists, links…)
+- **Image** — Display a banner or image with an optional link
+- **Iframe** — Embed an external page with configurable height
+- **Countdown** — Countdown to any target date
+- **Separator** — Divider line with optional label
+- **System monitor** — CPU, RAM and disk usage with color-coded progress bars
 
 ## Screenshots
 
