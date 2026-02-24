@@ -17,16 +17,16 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 
 ## Screenshots
 
-![Dashboard overview](assets/Screenshot1.png)
+![Dashboard overview](assets/Screenshot1.png)<br>
 *Main dashboard — organize your self-hosted services by category, with live health checks and custom tags.*
 
-![Configuration panel](assets/Screenshot2.png)
+![Configuration panel](assets/Screenshot2.png)<br>
 *Inline configuration — add, edit and reorder services directly from the browser, no config file editing needed.*
 
-![Multi-server picker](assets/Screenshot3.png)
+![Multi-server picker](assets/Screenshot3.png)<br>
 *Multi-server support — click any service to choose which server to open.*
 
-![Backup manager](assets/Screenshot4.png)
+![Backup manager](assets/Screenshot4.png)<br>
 *Backup manager — create and restore per-page backups with a single click.*
 
 > **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
