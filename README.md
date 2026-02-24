@@ -129,12 +129,6 @@ Anyone who can reach Roampage can read and write your full configuration.
 
 **If you expose Roampage outside your local network** (public internet, shared VPN, etc.), add authentication at the reverse-proxy layer before doing so. Tools like [Authelia](https://www.authelia.com/), [Authentik](https://goauthentik.io/), or nginx basic auth work well for this.
 
-### Credentials in transit
-
-Any credentials stored in your config are transmitted between your browser and Roampage. On a plain HTTP setup they travel in cleartext on the local network.
-
-If this matters to you, place Roampage behind a reverse proxy that terminates HTTPS (Caddy, nginx, Traefik).
-
 ### What is protected
 
 | Protection | Details |
