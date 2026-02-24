@@ -20,15 +20,7 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
 
 ### Widgets
-- **Clock** — Real-time clock with date display
-- **Weather** — 7-day forecast by city, powered by Open-Meteo (no API key required)
-- **Bookmarks** — Quick links grid with icons and custom labels
-- **Text** — Rich text editor with formatting (bold, italic, lists, links…)
-- **Image** — Display a banner or image with an optional link
-- **Iframe** — Embed an external page with configurable height
-- **Countdown** — Countdown to any target date
-- **Separator** — Divider line with optional label
-- **System monitor** — CPU, RAM and disk usage with color-coded progress bars
+Clock · Weather · Bookmarks · Text · Image · Iframe · Countdown · Separator · System monitor
 
 ## Screenshots
 
