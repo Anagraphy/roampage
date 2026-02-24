@@ -1,6 +1,20 @@
 # 🚐 Roampage
 A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
 
+## Screenshots
+
+![Dashboard overview](assets/Screenshot1.png)
+*Main dashboard — organize your self-hosted services by category, with live health checks and custom tags.*
+
+![Configuration panel](assets/Screenshot2.png)
+*Inline configuration — add, edit and reorder services directly from the browser, no config file editing needed.*
+
+![Multi-server picker](assets/Screenshot3.png)
+*Multi-server support — click any service to choose which server to open.*
+
+![Backup manager](assets/Screenshot4.png)
+*Backup manager — create and restore per-page backups with a single click.*
+
 ## Features
 - **Responsive** — Works on desktop and mobile
 - **Inline editing** — Click "Config" to add/edit/remove categories, services, servers
