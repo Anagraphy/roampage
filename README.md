@@ -13,6 +13,8 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **Import/Export** — Backup and restore your config as JSON, with download/upload file support
 - **Auto URL prefix** — IP addresses automatically get `http://`, domains get `https://`
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
+> **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
+
 ## Quick Start
 ```bash
 docker compose up -d
@@ -75,13 +77,13 @@ Roampage is designed for **trusted local networks** (home LAN, self-hosted VPN).
 
 ### No authentication
 
-Anyone who can reach Roampage can read and write your full configuration, including API keys and integration credentials stored in it.
+Anyone who can reach Roampage can read and write your full configuration.
 
 **If you expose Roampage outside your local network** (public internet, shared VPN, etc.), add authentication at the reverse-proxy layer before doing so. Tools like [Authelia](https://www.authelia.com/), [Authentik](https://goauthentik.io/), or nginx basic auth work well for this.
 
-### API keys in transit
+### Credentials in transit
 
-Integration credentials (Jellyfin API key, Pi-hole password, etc.) are transmitted between your browser and Roampage. On a plain HTTP setup they travel in cleartext on the local network.
+Any credentials stored in your config are transmitted between your browser and Roampage. On a plain HTTP setup they travel in cleartext on the local network.
 
 If this matters to you, place Roampage behind a reverse proxy that terminates HTTPS (Caddy, nginx, Traefik).
 
