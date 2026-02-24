@@ -29,9 +29,9 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 ![Backup manager](assets/Screenshot4.png)<br>
 *Backup manager — manual backups on demand and automatic weekly backups, restorable with a single click.*
 
-> **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
-
 ## Installation
+
+> **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
 
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your machine.
