@@ -793,7 +793,7 @@ function render(){
     if(ec===2&&cats.length>1){const mid=Math.ceil(cats.length/2);gc=`<div>${cats.slice(0,mid).map(renderCategory).join("")}</div><div>${cats.slice(mid).map(renderCategory).join("")}</div>`;}
     else{gc=`<div>${cats.map(renderCategory).join("")}</div>`;}
     const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/></svg>${columns} col</button>`;
-    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">click to show servers · <span>middle-click</span> opens first link</div>`;
+    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">Click on a service to choose a server. <span>Middle-click</span> opens the first link.</div>`;
   }
 
   app.innerHTML=`<div class="header"><div class="header-left"><img src="/logo.png" class="header-logo" alt="Roampage"><h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
