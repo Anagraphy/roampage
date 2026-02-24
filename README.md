@@ -18,8 +18,7 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **Import/Export** — Export and import your full config as JSON, with embedded images
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
 
-### Widgets
-Clock · Weather · Bookmarks · Text · Image · Iframe · Countdown · Separator · System monitor
+- **Widgets** — Clock, Weather, Bookmarks, Text, Image, Iframe, Countdown, Separator, System monitor
 
 ## Screenshots
 
