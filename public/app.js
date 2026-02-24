@@ -93,6 +93,7 @@ function pushPageUrl(){const slug=pageSlug(page());history.replaceState(null,"",
 function shellScrollTop(){const sh=document.getElementById("shell");if(sh)sh.scrollTop=0;}
 window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(location.pathname);render();shellScrollTop();startHealthLoop();});
 function getTagColor(t){const p=page();return p.tags&&p.tags[t]?p.tags[t]:"#6b7280";}
+function tagTextColor(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return(0.299*r+0.587*g+0.114*b)/255>0.5?"#000":"#fff";}
 function getAllTags(){const p=page();return p.tags?Object.keys(p.tags):[];}
 
 function autoPrefix(url){url=(url||"").trim();if(!url)return url;
@@ -209,9 +210,9 @@ function getSvcStatus(svc){
   if(svc.type)return null; // widgets have no status
   const servers=(svc.servers||[]).filter(s=>s.url);
   if(!servers.length)return"checking";
-  // Up if ANY server is up; down only if all checked servers are down
+  // Green only if ALL servers are up; red if ALL down; orange if partial or still loading
   const statuses=servers.map(s=>getServerStatus(s.url));
-  if(statuses.some(s=>s==="up"))return"up";
+  if(statuses.every(s=>s==="up"))return"up";
   if(statuses.every(s=>s==="down"))return"down";
   return"checking";
 }
@@ -252,7 +253,7 @@ function renderWidgetPicker(){
 // ═══════════════════════════════════════════════════════════════
 // RENDER HELPERS
 // ═══════════════════════════════════════════════════════════════
-function renderTag(t){return`<span class="tag" style="background:${getTagColor(t)}">${h(t)}</span>`;}
+function renderTag(t){const bg=getTagColor(t);return`<span class="tag" style="background:${bg};color:${tagTextColor(bg)}">${h(t)}</span>`;}
 function renderSvcStatus(svc){
   const status = getSvcStatus(svc);
   if(!status)return"";
@@ -565,7 +566,7 @@ function renderBackupModal(){
 // ═══════════════════════════════════════════════════════════════
 // EDIT MODE RENDERS
 // ═══════════════════════════════════════════════════════════════
-function renderTagsEditor(svc,ci,si){const pills=(svc.tags||[]).map(t=>`<span class="tag-pill" style="background:${getTagColor(t)};color:#fff;border-color:${getTagColor(t)}" data-action="remove-tag-from-svc" data-cat="${ci}" data-svc="${si}" data-tag="${h(t)}">${h(t)}<span class="tag-x">×</span></span>`).join("");const avail=getAllTags().filter(t=>!(svc.tags||[]).includes(t)).map(t=>`<span class="tag-pill" style="background:transparent;color:${getTagColor(t)};border-color:${getTagColor(t)}" data-action="add-tag-to-svc" data-cat="${ci}" data-svc="${si}" data-tag="${h(t)}">${h(t)}</span>`).join("");return`<div><label class="edit-label">Tags</label><div style="display:flex;gap:6px;flex-wrap:wrap">${pills}${avail}</div></div>`;}
+function renderTagsEditor(svc,ci,si){const pills=(svc.tags||[]).map(t=>`<span class="tag-pill" style="background:${getTagColor(t)};color:${tagTextColor(getTagColor(t))};border-color:${getTagColor(t)}" data-action="remove-tag-from-svc" data-cat="${ci}" data-svc="${si}" data-tag="${h(t)}">${h(t)}<span class="tag-x">×</span></span>`).join("");const avail=getAllTags().filter(t=>!(svc.tags||[]).includes(t)).map(t=>`<span class="tag-pill" style="background:transparent;color:${getTagColor(t)};border-color:${getTagColor(t)}" data-action="add-tag-to-svc" data-cat="${ci}" data-svc="${si}" data-tag="${h(t)}">${h(t)}</span>`).join("");return`<div><label class="edit-label">Tags</label><div style="display:flex;gap:6px;flex-wrap:wrap">${pills}${avail}</div></div>`;}
 
 function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t=>{const bg=getTagColor(t);return`<div style="display:inline-flex;gap:4px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:4px 6px"><input type="color" value="${bg}" data-action="recolor-tag" data-tag="${h(t)}" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;padding:0;border-radius:4px"><input class="edit-input" style="width:80px;padding:4px 6px;text-transform:uppercase;font-weight:700;font-size:10px;background:transparent;border:none" value="${h(t)}" data-action="rename-tag" data-old="${h(t)}"><button class="icon-btn danger" style="padding:3px" data-action="delete-tag" data-tag="${h(t)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;}).join("");return`<div class="edit-section"><label class="edit-label">Tag definitions</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${items}<div style="display:inline-flex;gap:4px;align-items:center"><input class="new-tag-input" id="new-tag-name" placeholder="New tag"><button class="btn-browse" style="padding:4px 10px" data-action="add-global-tag">+</button></div></div></div>`;}
 
@@ -792,7 +793,7 @@ function render(){
     if(ec===2&&cats.length>1){const mid=Math.ceil(cats.length/2);gc=`<div>${cats.slice(0,mid).map(renderCategory).join("")}</div><div>${cats.slice(mid).map(renderCategory).join("")}</div>`;}
     else{gc=`<div>${cats.map(renderCategory).join("")}</div>`;}
     const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/></svg>${columns} col</button>`;
-    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint"><span>middle-click</span> opens first link</div>`;
+    body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">click to show servers · <span>middle-click</span> opens first link</div>`;
   }
 
   app.innerHTML=`<div class="header"><div class="header-left"><img src="/logo.png" class="header-logo" alt="Roampage"><h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
