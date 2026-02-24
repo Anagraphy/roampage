@@ -10,7 +10,6 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **Multi-page** — Create multiple pages, each with their own categories, services, tags and wallpaper
 - **Live health checks** — Real-time up/down status for each service and server, with per-server indicators in the selector
 - **Search** — Filter services instantly by name or description (`Ctrl+K`)
-- **Column toggle** — Switch between 1 and 2 column layout on desktop
 - **Custom tags** — Create, rename, recolor and delete tags with a built-in color picker
 - **Wallpaper** — Upload a background image per page with automatic compression and smooth gradient fade
 - **Icon browser** — Browse and search 2500+ icons from dashboardicons.com directly in the editor
