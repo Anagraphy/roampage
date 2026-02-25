@@ -1,6 +1,6 @@
 services:
   roampage:
-    image: ghcr.io/anagraphy/roampage:latest
+    image: anagraphy/roampage:latest
     container_name: roampage
     restart: unless-stopped
     ports:
