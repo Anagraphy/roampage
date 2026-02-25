@@ -1,6 +1,6 @@
 services:
   roampage:
-    image: anagraphy/roampage:latest
+    build: .
     container_name: roampage
     restart: unless-stopped
     ports:
