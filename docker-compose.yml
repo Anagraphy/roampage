@@ -4,7 +4,7 @@ services:
     container_name: roampage
     restart: unless-stopped
     ports:
-      - "80:3000"
+      - "3046:3000"
     # environment:
     #   ENCRYPTION_KEY: "none"  # or a 64-char hex key — see README
     volumes:
