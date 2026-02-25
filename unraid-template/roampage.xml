@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Roampage</Name>
+  <Repository>anagraphy/roampage:latest</Repository>
+  <Registry>https://hub.docker.com/r/anagraphy/roampage</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Anagraphy/roampage/issues</Support>
+  <Project>https://github.com/Anagraphy/roampage</Project>
+  <Overview>
+    A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
+
+    Features:
+    - Responsive UI (desktop and mobile)
+    - Inline editing — add, reorder and edit services directly from the browser
+    - Multi-page support with custom wallpapers
+    - Live health checks for each service
+    - 2500+ icons via dashboardicons.com
+    - Widgets: Clock, Weather, Bookmarks, Text, Image, Iframe, Countdown, System monitor
+    - Encrypted config and backups (AES-256-GCM)
+    - Import / Export your full config as JSON
+
+    Designed for trusted local networks. No built-in authentication — use a reverse proxy (Authelia, Authentik, nginx basic auth) if exposing outside your LAN.
+  </Overview>
+  <Category>Network:Web Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3046]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Anagraphy/roampage/main/unraid-template/roampage.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Anagraphy/roampage/main/public/favicon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <Requires/>
+
+  <!-- Port -->
+  <Config
+    Name="WebUI Port"
+    Target="3000"
+    Default="3046"
+    Mode="tcp"
+    Description="Port for the Roampage web interface."
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">3046</Config>
+
+  <!-- Volume -->
+  <Config
+    Name="Data"
+    Target="/data"
+    Default="/mnt/user/appdata/roampage"
+    Mode="rw"
+    Description="Persistent storage for config, backups and wallpapers."
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/roampage</Config>
+
+  <!-- Optional: Encryption key -->
+  <Config
+    Name="ENCRYPTION_KEY"
+    Target="ENCRYPTION_KEY"
+    Default=""
+    Mode=""
+    Description="AES-256-GCM key for config and backups. Leave empty for auto-generated key (saved to /data/.roampage.key). Set to 'none' to disable encryption. For portability across rebuilds, provide a fixed 64-char hex key: openssl rand -hex 32"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"/>
+
+</Container>
