@@ -57,7 +57,7 @@ Paste the following content, then save with `Ctrl+O`, `Enter`, and exit with `Ct
 ```yaml
 services:
   roampage:
-    image: ghcr.io/anagraphy/roampage:latest
+    image: anagraphy/roampage:latest
     container_name: roampage
     ports:
       - "3046:3000"
