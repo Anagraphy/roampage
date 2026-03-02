@@ -572,8 +572,8 @@ function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t
 
 function renderTextColorEditor(){
   const color=config.textColor||"";
-  const resetBtn=color?`<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px">↩ Défaut</button>`:"";
-  return`<div class="edit-section"><label class="edit-label">Couleur du texte</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""} ${resetBtn}</div></div>`;
+  const resetStyle=color?'':'opacity:.4;cursor:not-allowed';
+  return`<div class="edit-section"><label class="edit-label">Couleur du texte</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""}<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px;${resetStyle}" ${color?"":"disabled"}>↩ Défaut</button></div></div>`;
 }
 
 function renderLogoEditor(){
@@ -1309,6 +1309,7 @@ document.addEventListener("change",e=>{
   const el=e.target;
   if(!el||!el.dataset)return;
   if(el.dataset.action==="recolor-tag"){page().tags[el.dataset.tag]=el.value;saveConfig();const pill=el.closest("div");if(pill)pill.style.borderColor=el.value;}
+  if(el.dataset.action==="set-text-color"){config.textColor=el.value;applyTextColor();saveConfig();render();}
   // Widget field change (for datetime-local, number etc)
   if(el.dataset.action==="edit-widget-field"){
     const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc),f=el.dataset.field;
