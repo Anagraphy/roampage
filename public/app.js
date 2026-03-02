@@ -35,7 +35,7 @@ const DEFAULT_CONFIG = {
 const DEFAULT_TAG_COLORS=["#8b5cf6","#10b981","#6b7280","#f59e0b","#3b82f6","#ec4899","#ef4444","#06b6d4","#f97316","#84cc16"];
 let config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let configVersion=null;
-let editMode=false, columns=2, popupService=null, jsonModal="", jsonText="", jsonLoading=false, saveTimeout=null;
+let editMode=false, popupService=null, jsonModal="", jsonText="", jsonLoading=false, saveTimeout=null;
 let backupModal=false, backups=[];
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
 let widgetPickerCat=-1; // -1 = hidden, >=0 = category index
@@ -571,7 +571,7 @@ function renderTagsEditor(svc,ci,si){const pills=(svc.tags||[]).map(t=>`<span cl
 function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t=>{const bg=getTagColor(t);return`<div style="display:inline-flex;gap:4px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:4px 6px"><input type="color" value="${bg}" data-action="recolor-tag" data-tag="${h(t)}" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;padding:0;border-radius:4px"><input class="edit-input" style="width:80px;padding:4px 6px;text-transform:uppercase;font-weight:700;font-size:10px;background:transparent;border:none" value="${h(t)}" data-action="rename-tag" data-old="${h(t)}"><button class="icon-btn danger" style="padding:3px" data-action="delete-tag" data-tag="${h(t)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;}).join("");return`<div class="edit-section"><label class="edit-label">Tag definitions</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${items}<div style="display:inline-flex;gap:4px;align-items:center"><input class="new-tag-input" id="new-tag-name" placeholder="New tag"><button class="btn-browse" style="padding:4px 10px" data-action="add-global-tag">+</button></div></div></div>`;}
 
 function renderTextColorEditor(){
-  const color=config.textColor||"";
+  const color=page().textColor||"";
   const resetStyle=color?'':'opacity:.4;cursor:not-allowed';
   return`<div class="edit-section"><label class="edit-label">Couleur du texte</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""}<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px;${resetStyle}" ${color?"":"disabled"}>↩ Défaut</button></div></div>`;
 }
@@ -596,9 +596,9 @@ function renderWallpaperEditor(){
 
 function applyTextColor(){
   let tag=document.getElementById("roampage-text-color");
-  if(!config.textColor){if(tag)tag.remove();return;}
+  if(!page().textColor){if(tag)tag.remove();return;}
   if(!tag){tag=document.createElement("style");tag.id="roampage-text-color";document.head.appendChild(tag);}
-  tag.textContent=`.cat-title,.svc-desc{color:${config.textColor}!important}`;
+  tag.textContent=`.cat-title,.svc-desc{color:${page().textColor}!important}`;
 }
 
 function applyWallpaper(){
@@ -769,11 +769,38 @@ function renderEditCategory(cat,ci,total){
   return`<div class="edit-cat" draggable="false"><div class="edit-cat-header"><input class="edit-input title-input" style="flex:1" value="${h(cat.name)}" data-action="edit-cat-name" data-cat="${ci}"><div style="display:flex;gap:4px">${up}${dn}<button class="icon-btn danger" data-action="del-cat" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div>${svcs}<div style="display:flex;gap:8px"><button class="btn-add btn-add-svc" style="flex:1" data-action="add-svc" data-cat="${ci}">+ Add service</button><button class="btn-add btn-add-widget" style="flex:1" data-action="show-widget-picker" data-cat="${ci}">+ Add widget</button></div></div>`;
 }
 
+function renderLayoutEditor(){
+  const p=page();
+  const colCount=p.columns||2;
+  const colBtnStyle=(n)=>n===colCount
+    ?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc'
+    :'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
+  const colButtons=`<div style="display:flex;gap:6px;margin-bottom:10px"><button class="btn-small" style="${colBtnStyle(1)}" data-action="set-cols" data-cols="1">1 colonne</button><button class="btn-small" style="${colBtnStyle(2)}" data-action="set-cols" data-cols="2">2 colonnes</button></div>`;
+  if(colCount===1){return`<div class="edit-section"><label class="edit-label">Colonnes</label>${colButtons}</div>`;}
+  const cats=p.categories;
+  const leftCats=cats.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
+  const rightCats=cats.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
+  const renderColItem=(c,i,colArr,colIdx)=>{
+    const isFirst=colIdx===0;const isLast=colIdx===colArr.length-1;
+    const upBtn=isFirst?'':`<button class="icon-btn" title="Monter" data-action="move-cat-in-col" data-cat="${i}" data-dir="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`;
+    const dnBtn=isLast?'':`<button class="icon-btn" title="Descendre" data-action="move-cat-in-col" data-cat="${i}" data-dir="1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>`;
+    const isLeft=(c.column||1)===1;
+    const switchBtn=isLeft
+      ?`<button class="icon-btn" title="Déplacer à droite" data-action="toggle-cat-col" data-cat="${i}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>`
+      :`<button class="icon-btn" title="Déplacer à gauche" data-action="toggle-cat-col" data-cat="${i}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>`;
+    return`<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;background:rgba(255,255,255,.04);border-radius:6px;margin-bottom:4px"><span style="flex:1;font-size:12px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(c.name||"Sans nom")}</span>${upBtn}${dnBtn}${switchBtn}</div>`;
+  };
+  const leftHtml=leftCats.map(({c,i},ci)=>renderColItem(c,i,leftCats,ci)).join("")||`<div style="font-size:11px;color:#64748b;padding:4px">Vide</div>`;
+  const rightHtml=rightCats.map(({c,i},ci)=>renderColItem(c,i,rightCats,ci)).join("")||`<div style="font-size:11px;color:#64748b;padding:4px">Vide</div>`;
+  const grid=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><div style="font-size:11px;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Gauche</div>${leftHtml}</div><div><div style="font-size:11px;color:#64748b;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Droite</div>${rightHtml}</div></div>`;
+  return`<div class="edit-section"><label class="edit-label">Colonnes</label>${colButtons}${grid}</div>`;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(){
-  const app=$("#app");const p=page();const mobile=isMobile();const ec=mobile?1:columns;
+  const app=$("#app");const p=page();const mobile=isMobile();const colCount=p.columns||2;const ec=mobile?1:colCount;
   const wasSearchFocused = document.activeElement && document.activeElement.classList.contains("search-input");
   let searchSelectionStart = -1, searchSelectionEnd = -1;
   if (wasSearchFocused) {
@@ -811,14 +838,14 @@ function render(){
   let body;
   if(editMode){
     const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
-    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderLayoutEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
     const cats=p.categories;let gc;
-    if(ec===2&&cats.length>1){const mid=Math.ceil(cats.length/2);gc=`<div>${cats.slice(0,mid).map(renderCategory).join("")}</div><div>${cats.slice(mid).map(renderCategory).join("")}</div>`;}
+    if(ec===2){const leftCats=cats.filter(c=>(c.column||1)===1);const rightCats=cats.filter(c=>c.column===2);gc=`<div>${leftCats.map(renderCategory).join("")}</div><div>${rightCats.map(renderCategory).join("")}</div>`;}
     else{gc=`<div>${cats.map(renderCategory).join("")}</div>`;}
-    const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${columns>=2?1:.3}"/></svg>${columns} col</button>`;
+    const colBtn=mobile?"":`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/></svg>${colCount} col</button>`;
     body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">Click on a service to choose a server. <span>Middle-click</span> opens the first link.</div>`;
   }
 
@@ -982,7 +1009,7 @@ document.addEventListener("click",e=>{
   switch(action){
     case"toggle-edit":editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;}render();if(!editMode)startHealthLoop();break;
     case"toggle-svc-healthcheck":{const svc=p.categories[ci].services[si];svc.healthcheckEnabled=svc.healthcheckEnabled===false;saveConfig();render();break;}
-    case"toggle-cols":columns=columns===1?2:1;render();break;
+    case"toggle-cols":{p.columns=(p.columns||2)===1?2:1;saveConfig();render();break;}
 
     // Pages
     case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
@@ -993,7 +1020,20 @@ document.addEventListener("click",e=>{
     case"del-cat":p.categories.splice(ci,1);saveConfig();render();break;
     case"move-cat-up":[p.categories[ci],p.categories[ci-1]]=[p.categories[ci-1],p.categories[ci]];saveConfig();render();break;
     case"move-cat-down":[p.categories[ci],p.categories[ci+1]]=[p.categories[ci+1],p.categories[ci]];saveConfig();render();break;
-    case"add-cat":p.categories.push({id:"cat_"+uid(),name:"NEW CATEGORY",services:[]});saveConfig();render();break;
+    case"add-cat":p.categories.push({id:"cat_"+uid(),name:"NEW CATEGORY",column:1,services:[]});saveConfig();render();break;
+    case"toggle-cat-col":{p.categories[ci].column=p.categories[ci].column===2?1:2;saveConfig();render();break;}
+    case"set-cols":{p.columns=parseInt(btn.dataset.cols)||2;saveConfig();render();break;}
+    case"move-cat-in-col":{
+      const dir=parseInt(btn.dataset.dir)||0;
+      const col=p.categories[ci].column||1;
+      const sameCol=p.categories.map((c,idx)=>({c,idx})).filter(({c})=>(c.column||1)===col);
+      const pos=sameCol.findIndex(({idx})=>idx===ci);
+      const tp=pos+dir;
+      if(tp<0||tp>=sameCol.length)break;
+      const ti=sameCol[tp].idx;
+      [p.categories[ci],p.categories[ti]]=[p.categories[ti],p.categories[ci]];
+      saveConfig();render();break;
+    }
 
     // Services
     case"toggle-svc":{const k=`${ci}-${si}`;if(openSvcBodies.has(k))openSvcBodies.delete(k);else openSvcBodies.add(k);const b=$(`#svc-body-${ci}-${si}`),c=$(`#chev-${ci}-${si}`);if(b)b.style.display=openSvcBodies.has(k)?"flex":"none";if(c)c.classList.toggle("open",openSvcBodies.has(k));break;}
@@ -1109,7 +1149,7 @@ document.addEventListener("click",e=>{
     case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
 
     // Text color
-    case"reset-text-color":config.textColor="";applyTextColor();saveConfig();render();break;
+    case"reset-text-color":page().textColor="";applyTextColor();saveConfig();render();break;
 
     // Logo
     case"del-logo":{if(config.logoUrl){const fname=config.logoUrl.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}config.logoUrl="";saveConfig();render();break;}
@@ -1139,7 +1179,7 @@ document.addEventListener("input",e=>{
     case"edit-svc-desc":p.categories[ci].services[si].description=el.value;saveConfig();break;
     case"edit-srv-label":p.categories[ci].services[si].servers[sri].label=el.value;saveConfig();break;
     case"edit-srv-url":p.categories[ci].services[si].servers[sri].url=el.value;saveConfig();break;
-    case"set-text-color":config.textColor=el.value;applyTextColor();saveConfig();break;
+    case"set-text-color":page().textColor=el.value;applyTextColor();saveConfig();break;
     case"icon-search":iconBrowserSearch=el.value;renderIconBrowserContent();break;
     case"rename-tag":{const old=el.dataset.old,nw=el.value.trim().toUpperCase();if(nw&&nw!==old&&!p.tags[nw]){p.tags[nw]=p.tags[old];delete p.tags[old];for(const cat of p.categories)for(const svc of cat.services)svc.tags=(svc.tags||[]).map(t=>t===old?nw:t);el.dataset.old=nw;saveConfig();}break;}
     // Weather city search input
@@ -1311,7 +1351,7 @@ document.addEventListener("change",e=>{
   const el=e.target;
   if(!el||!el.dataset)return;
   if(el.dataset.action==="recolor-tag"){page().tags[el.dataset.tag]=el.value;saveConfig();const pill=el.closest("div");if(pill)pill.style.borderColor=el.value;}
-  if(el.dataset.action==="set-text-color"){config.textColor=el.value;applyTextColor();saveConfig();render();}
+  if(el.dataset.action==="set-text-color"){page().textColor=el.value;applyTextColor();saveConfig();render();}
   // Widget field change (for datetime-local, number etc)
   if(el.dataset.action==="edit-widget-field"){
     const ci=parseInt(el.dataset.cat),si=parseInt(el.dataset.svc),f=el.dataset.field;
