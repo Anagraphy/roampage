@@ -1110,7 +1110,7 @@ app.get("/api/auth/session", (req, res) => {
 // Set or remove a PIN/password on a page or globally
 // Also auto-unlocks the scope so the admin stays logged in after setting a PIN
 app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (req, res) => {
-  const { scope, secret, type } = req.body || {};
+  const { scope, secret, type, currentSecret } = req.body || {};
   if (!scope) return res.status(400).json({ error: "Missing scope" });
 
   const rawConfig = readConfig() || {};
@@ -1118,7 +1118,11 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
 
   if (scope === "global") {
     if (removing) {
-      if (rawConfig.auth) delete rawConfig.auth.globalPin;
+      const existingHash = rawConfig.auth?.globalPin?.hash;
+      if (!existingHash) return res.status(404).json({ error: "No global PIN set" });
+      if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
+      if (!verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+      delete rawConfig.auth.globalPin;
       if (rawConfig.auth && Object.keys(rawConfig.auth).length === 0) delete rawConfig.auth;
     } else {
       if (!rawConfig.auth) rawConfig.auth = {};
@@ -1128,6 +1132,10 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
     const pg = (rawConfig.pages || []).find(p => p.id === scope);
     if (!pg) return res.status(404).json({ error: "Page not found" });
     if (removing) {
+      const existingHash = pg.pin?.hash;
+      if (!existingHash) return res.status(404).json({ error: "No PIN set for this page" });
+      if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
+      if (!verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
       delete pg.pin;
     } else {
       pg.pin = { hash: hashSecret(String(secret)), type: type || "pin" };
