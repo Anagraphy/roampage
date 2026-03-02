@@ -267,18 +267,22 @@ encryptLegacyBak();
 
 // ── Auth: PBKDF2 hashing & session management ─────────────────
 // pbkdf2Sync blocks ~200ms per call — acceptable with a 5/15min/IP rate limit.
-function hashSecret(secret) {
+async function hashSecret(secret) {
   const salt = crypto.randomBytes(16);
-  const dk = crypto.pbkdf2Sync(secret, salt, 310000, 32, "sha256");
+  const dk = await new Promise((resolve, reject) =>
+    crypto.pbkdf2(secret, salt, 310000, 32, "sha256", (err, buf) => err ? reject(err) : resolve(buf))
+  );
   return `pbkdf2:sha256:310000:${salt.toString("base64")}:${dk.toString("base64")}`;
 }
 
-function verifySecret(secret, stored) {
+async function verifySecret(secret, stored) {
   const parts = stored.split(":");
   if (parts.length !== 5 || parts[0] !== "pbkdf2") return false;
   const salt = Buffer.from(parts[3], "base64");
   const expected = Buffer.from(parts[4], "base64");
-  const derived = crypto.pbkdf2Sync(secret, salt, parseInt(parts[2]), 32, "sha256");
+  const derived = await new Promise((resolve, reject) =>
+    crypto.pbkdf2(secret, salt, parseInt(parts[2]), 32, "sha256", (err, buf) => err ? reject(err) : resolve(buf))
+  );
   if (derived.length !== expected.length) return false;
   return crypto.timingSafeEqual(derived, expected);
 }
@@ -294,9 +298,10 @@ function getSession(req) {
   return m ? (sessions.get(m[1]) || null) : null;
 }
 
-function setSessionCookie(res, token) {
+function setSessionCookie(res, token, req) {
   // No Max-Age → session cookie (expires when browser closes)
-  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+  const secure = req && (req.secure || req.headers["x-forwarded-proto"] === "https") ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/${secure}`);
 }
 
 // Strip auth hashes and mask locked pages before sending config to client.
@@ -533,6 +538,7 @@ const MAX_BACKUPS = 10;
 
 function stripBase64ForBackup(data) {
   const c = JSON.parse(JSON.stringify(data));
+  delete c.pin; // Never include PIN hashes in backups
   for (const cat of c.categories || []) {
     for (const svc of cat.services || []) {
       if (svc.imageUrl && svc.imageUrl.startsWith("data:")) svc.imageUrl = "";
@@ -1034,7 +1040,7 @@ app.get("/api/weather", weatherRateLimit, async (req, res) => {
 // ── API: Auth endpoints ───────────────────────────────────────
 
 // Unlock a page or global scope (rate-limited to 5 attempts/15min/IP)
-app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), (req, res) => {
+app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
   const { scope, secret } = req.body || {};
   if (!scope || !secret) return res.status(400).json({ error: "Missing scope or secret" });
 
@@ -1051,12 +1057,12 @@ app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), (req
   let matched = false;
 
   if (scope === "global") {
-    if (globalHash && verifySecret(String(secret), globalHash)) { matched = true; matchedGlobal = true; }
+    if (globalHash && await verifySecret(String(secret), globalHash)) { matched = true; matchedGlobal = true; }
   } else {
     // Try page pin first, then global pin (master key)
-    if (pagePins[scope] && verifySecret(String(secret), pagePins[scope])) {
+    if (pagePins[scope] && await verifySecret(String(secret), pagePins[scope])) {
       matched = true;
-    } else if (globalHash && verifySecret(String(secret), globalHash)) {
+    } else if (globalHash && await verifySecret(String(secret), globalHash)) {
       matched = true; matchedGlobal = true;
     }
   }
@@ -1079,7 +1085,7 @@ app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), (req
     if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
     sess.unlockedPages.add(scope);
   }
-  setSessionCookie(res, token);
+  setSessionCookie(res, token, req);
   res.json({ ok: true });
 });
 
@@ -1109,7 +1115,7 @@ app.get("/api/auth/session", (req, res) => {
 
 // Set or remove a PIN/password on a page or globally
 // Also auto-unlocks the scope so the admin stays logged in after setting a PIN
-app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (req, res) => {
+app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
   const { scope, secret, type, currentSecret } = req.body || {};
   if (!scope) return res.status(400).json({ error: "Missing scope" });
 
@@ -1121,12 +1127,17 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
       const existingHash = rawConfig.auth?.globalPin?.hash;
       if (!existingHash) return res.status(404).json({ error: "No global PIN set" });
       if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
-      if (!verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+      if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
       delete rawConfig.auth.globalPin;
       if (rawConfig.auth && Object.keys(rawConfig.auth).length === 0) delete rawConfig.auth;
     } else {
       if (!rawConfig.auth) rawConfig.auth = {};
-      rawConfig.auth.globalPin = { hash: hashSecret(String(secret)), type: type || "pin" };
+      const existingHash = rawConfig.auth.globalPin?.hash;
+      if (existingHash) {
+        if (!currentSecret) return res.status(401).json({ error: "Current secret required to change PIN" });
+        if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+      }
+      rawConfig.auth.globalPin = { hash: await hashSecret(String(secret)), type: type || "pin" };
     }
   } else {
     const pg = (rawConfig.pages || []).find(p => p.id === scope);
@@ -1135,10 +1146,15 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
       const existingHash = pg.pin?.hash;
       if (!existingHash) return res.status(404).json({ error: "No PIN set for this page" });
       if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
-      if (!verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+      if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
       delete pg.pin;
     } else {
-      pg.pin = { hash: hashSecret(String(secret)), type: type || "pin" };
+      const existingHash = pg.pin?.hash;
+      if (existingHash) {
+        if (!currentSecret) return res.status(401).json({ error: "Current secret required to change PIN" });
+        if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+      }
+      pg.pin = { hash: await hashSecret(String(secret)), type: type || "pin" };
     }
   }
 
@@ -1162,7 +1178,7 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
       if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
       sess.unlockedPages.add(scope);
     }
-    setSessionCookie(res, token);
+    setSessionCookie(res, token, req);
   }
 
   res.json({ ok: true, _version: configVersion });
