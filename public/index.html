@@ -142,6 +142,10 @@ select.edit-input option{background:#1e2030;color:#e2e8f0}
 .drop-target-after::after{content:"";display:block;height:2px;background:#8b5cf6;margin-top:8px}
 .edit-col-zone{border-radius:10px;border:2px dashed transparent;transition:border-color .15s}
 .edit-col-zone.drop-target-zone{border-color:rgba(139,92,246,.5);background:rgba(139,92,246,.04)}
+.edit-title-inline{font-size:26px;font-weight:800;letter-spacing:1px;color:#fff;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,.15);padding:0 2px;outline:none;width:200px;font-family:inherit}
+.edit-title-inline:focus{border-bottom-color:#8b5cf6}
+@media(max-width:700px){.edit-title-inline{font-size:20px;width:130px}}
+.col-pick{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid;cursor:pointer;font-family:inherit;line-height:1.4}
 /* Widgets */
 .widget{border-radius:12px;padding:16px;margin:8px 0}
 .widget-clock{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px}

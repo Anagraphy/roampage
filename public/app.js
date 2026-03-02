@@ -785,7 +785,7 @@ function renderEditCategory(cat,ci,total,colCtx=null){
 // MAIN RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(){
-  const app=$("#app");const p=page();const mobile=isMobile();const colCount=p.columns||2;const ec=mobile?1:colCount;
+  const app=$("#app");const p=page();const mobile=isMobile();const colCount=p.columns||2;const ec=mobile?1:colCount;const cs=(n)=>n===colCount?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc':'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
   const wasSearchFocused = document.activeElement && document.activeElement.classList.contains("search-input");
   let searchSelectionStart = -1, searchSelectionEnd = -1;
   if (wasSearchFocused) {
@@ -822,18 +822,16 @@ function render(){
 
   let body;
   if(editMode){
-    const cs=(n)=>n===colCount?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc':'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
-    const titleSection=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"><label class="edit-label" style="margin-top:10px">Colonnes</label><div style="display:flex;gap:6px"><button class="btn-small" style="${cs(1)}" data-action="set-cols" data-cols="1">1 colonne</button><button class="btn-small" style="${cs(2)}" data-action="set-cols" data-cols="2">2 colonnes</button></div></div>`;
     const tail=`${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
     if(colCount>=2){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
       const renderCol=(items,isLeft)=>items.map(({c,i},colPos)=>renderEditCategory(c,i,p.categories.length,{colPos,colTotal:items.length,isLeft})).join("");
       const colHdr=(label)=>`<div style="font-size:11px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${label}</div>`;
-      body=`${titleSection}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="edit-col-zone" data-col-zone="1">${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div class="edit-col-zone" data-col-zone="2">${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
+      body=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="edit-col-zone" data-col-zone="1">${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div class="edit-col-zone" data-col-zone="2">${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
     }else{
       const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
-      body=`${titleSection}${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${tail}`;
+      body=`${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${tail}`;
     }
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
@@ -849,7 +847,11 @@ function render(){
   }
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
-  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}<h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
+  const colPick=editMode&&!mobile?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n}</button>`).join("")}</div>`:"";
+  const headerInner=editMode
+    ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
+    :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
+  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
   document.title=p.title||"Roampage";
   applyWallpaper();
   applyTextColor();
