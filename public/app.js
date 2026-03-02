@@ -1084,8 +1084,8 @@ document.addEventListener("click",e=>{
     case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;}render();if(!editMode)startHealthLoop();break;}
     // Lock / unlock (PIN auth)
     case"lock-scope":{const scope=btn.dataset.scope;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
-    case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;render();if(lockPinDigits.length===4){submitUnlock(page().lockScope||page().id,lockPinDigits);}}break;}
-    case"pin-backspace":{if(lockPinDigits.length>0){lockPinDigits=lockPinDigits.slice(0,-1);render();}break;}
+    case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));if(lockPinDigits.length===4){render();submitUnlock(page().lockScope||page().id,lockPinDigits);}}break;}
+    case"pin-backspace":{if(lockPinDigits.length>0){lockPinDigits=lockPinDigits.slice(0,-1);document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));}break;}
     case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().lockScope||page().id,inp.value);break;}
     // Security editor (setpin)
     case"set-global-pin":pinFormTarget="global";pinFormType="pin";render();break;

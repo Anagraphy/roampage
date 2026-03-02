@@ -1137,6 +1137,26 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
   writeConfig(rawConfig);
   configVersion = Date.now();
 
+  // Auto-unlock the scope so the admin stays in edit mode and sees "● Active"
+  if (!removing) {
+    let token;
+    const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
+    if (cookieMatch && sessions.has(cookieMatch[1])) {
+      token = cookieMatch[1];
+    } else {
+      token = generateToken();
+      sessions.set(token, { unlockedPages: new Set() });
+    }
+    const sess = sessions.get(token);
+    if (scope === "global") {
+      sess.unlockedPages = "global";
+    } else if (sess.unlockedPages !== "global") {
+      if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
+      sess.unlockedPages.add(scope);
+    }
+    setSessionCookie(res, token);
+  }
+
   res.json({ ok: true, _version: configVersion });
 });
 
