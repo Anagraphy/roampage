@@ -1086,7 +1086,7 @@ document.addEventListener("click",e=>{
   const p=page();
 
   switch(action){
-    case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;}render();if(!editMode)startHealthLoop();break;}
+    case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;pinRemoveTarget=null;}render();if(!editMode)startHealthLoop();break;}
     // Lock / unlock (PIN auth)
     case"lock-scope":{const scope=btn.dataset.scope;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
     case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));if(lockPinDigits.length===4){render();submitUnlock(page().lockScope||page().id,lockPinDigits);}}break;}
@@ -1097,7 +1097,7 @@ document.addEventListener("click",e=>{
     case"set-page-pin":pinRemoveTarget=null;pinFormTarget=page().id;pinFormType="pin";render();break;
     case"remove-global-pin":pinFormTarget=null;pinRemoveTarget="global";render();break;
     case"remove-page-pin":pinFormTarget=null;pinRemoveTarget=page().id;render();break;
-    case"confirm-remove-pin":{const inputEl=document.getElementById("pin-remove-input");const errEl=document.getElementById("pin-remove-error");if(!inputEl)break;const currentSecret=inputEl.value;if(!currentSecret){if(errEl){errEl.textContent="Enter your current PIN.";errEl.style.display="";}break;}const sc=pinRemoveTarget;pinRemoveTarget=null;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret:null,currentSecret})});if(res.ok){await refreshConfig();}else{const data=await res.json().catch(()=>({}));pinRemoveTarget=sc;render();const e2=document.getElementById("pin-remove-error");if(e2){e2.textContent=data.error==="Incorrect secret"?"Incorrect PIN.":data.error||"Error.";e2.style.display="";}}})();break;}
+    case"confirm-remove-pin":{const sc=pinRemoveTarget;if(!sc)break;const inputEl=document.getElementById("pin-remove-input");if(!inputEl)break;const currentSecret=inputEl.value.trim();if(!currentSecret){const errEl=document.getElementById("pin-remove-error");if(errEl){errEl.textContent="Enter your current PIN.";errEl.style.display="";}break;}pinRemoveTarget=null;render();(async()=>{try{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret:null,currentSecret})});if(res.ok){await refreshConfig();}else{const data=await res.json().catch(()=>({}));pinRemoveTarget=sc;render();const e2=document.getElementById("pin-remove-error");if(e2){e2.textContent=data.error==="Incorrect secret"?"Incorrect PIN.":data.error||"Error.";e2.style.display="";}}}catch{pinRemoveTarget=sc;render();}})();break;}
     case"cancel-remove-pin":pinRemoveTarget=null;render();break;
     case"confirm-set-pin":{const typeEl=document.getElementById("pin-form-type");const inputEl=document.getElementById("pin-form-input");const confirmEl=document.getElementById("pin-form-confirm");const errEl=document.getElementById("pin-form-error");if(!typeEl||!inputEl||!confirmEl)break;const ptype=typeEl.value;const secret=inputEl.value;const conf=confirmEl.value;const showErr=(msg)=>{if(errEl){errEl.textContent=msg;errEl.style.display="";}};if(!secret){showErr("Secret cannot be empty.");break;}if(secret!==conf){showErr("Secrets do not match.");break;}if(ptype==="pin"&&!/^\d{4}$/.test(secret)){showErr("PIN must be exactly 4 digits.");break;}const sc=pinFormTarget;pinFormTarget=null;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret,type:ptype})});if(res.ok){await refreshConfig();}else{pinFormTarget=sc;render();}})();break;}
     case"cancel-set-pin":pinFormTarget=null;render();break;
@@ -1105,7 +1105,7 @@ document.addEventListener("click",e=>{
     case"toggle-cols":{p.columns=(p.columns||2)===1?2:1;saveConfig();render();break;}
 
     // Pages
-    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;pinFormTarget=null;lockPinDigits="";lockError="";saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
+    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;pinFormTarget=null;pinRemoveTarget=null;lockPinDigits="";lockError="";saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
     case"add-page":config.pages.push(EMPTY_PAGE());config.currentPage=config.pages.length-1;editMode=true;openSvcBodies.clear();saveConfig();render();break;
     case"del-page":if(config.pages.length>1){config.pages.splice(pi,1);if(config.currentPage>=config.pages.length)config.currentPage=config.pages.length-1;saveConfig();render();}break;
 
@@ -1326,6 +1326,23 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
     const inp = e.target;
     if (inp.value.trim()) submitUnlock(page().lockScope||page().id, inp.value);
+  }
+  // Enter on PIN remove confirmation input → submit
+  if (e.key === "Enter" && e.target.id === "pin-remove-input") {
+    e.preventDefault();
+    const sc = pinRemoveTarget;
+    if (!sc) return;
+    const val = e.target.value.trim();
+    if (!val) return;
+    pinRemoveTarget = null;
+    render();
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/setpin", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret:null,currentSecret:val})});
+        if (res.ok) { await refreshConfig(); }
+        else { const data=await res.json().catch(()=>({})); pinRemoveTarget=sc; render(); const e2=document.getElementById("pin-remove-error"); if(e2){e2.textContent=data.error==="Incorrect secret"?"Incorrect PIN.":data.error||"Error.";e2.style.display="";} }
+      } catch { pinRemoveTarget=sc; render(); }
+    })();
   }
 });
 
