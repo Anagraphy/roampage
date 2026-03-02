@@ -830,7 +830,7 @@ function render(){
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
       const renderCol=(items,isLeft)=>items.map(({c,i},colPos)=>renderEditCategory(c,i,p.categories.length,{colPos,colTotal:items.length,isLeft})).join("");
       const colHdr=(label)=>`<div style="font-size:11px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${label}</div>`;
-      body=`${titleSection}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div>${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div>${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
+      body=`${titleSection}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="edit-col-zone" data-col-zone="1">${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div class="edit-col-zone" data-col-zone="2">${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
     }else{
       const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
       body=`${titleSection}${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${tail}`;
@@ -1260,26 +1260,29 @@ document.addEventListener("dragstart", e => {
 document.addEventListener("dragend", e => {
   e.target.classList.remove("dragging");
   e.target.draggable = false;
-  document.querySelectorAll(".drop-target-before, .drop-target-after").forEach(el => {
-    el.classList.remove("drop-target-before", "drop-target-after");
+  document.querySelectorAll(".drop-target-before, .drop-target-after, .drop-target-zone").forEach(el => {
+    el.classList.remove("drop-target-before", "drop-target-after", "drop-target-zone");
   });
 });
 
 document.addEventListener("dragover", e => {
   e.preventDefault();
   e.dataTransfer.dropEffect = "move";
-  document.querySelectorAll(".drop-target-before, .drop-target-after").forEach(el => {
-    el.classList.remove("drop-target-before", "drop-target-after");
+  document.querySelectorAll(".drop-target-before, .drop-target-after, .drop-target-zone").forEach(el => {
+    el.classList.remove("drop-target-before", "drop-target-after", "drop-target-zone");
   });
   const target = e.target.closest(".edit-cat, .edit-svc");
-  if (!target) return;
-  const rect = target.getBoundingClientRect();
-  const midpoint = rect.top + rect.height / 2;
-  const shouldInsertBefore = e.clientY < midpoint;
-  if (shouldInsertBefore) {
-    target.classList.add("drop-target-before");
+  if (target) {
+    const rect = target.getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    if (e.clientY < midpoint) {
+      target.classList.add("drop-target-before");
+    } else {
+      target.classList.add("drop-target-after");
+    }
   } else {
-    target.classList.add("drop-target-after");
+    const zone = e.target.closest(".edit-col-zone");
+    if (zone) zone.classList.add("drop-target-zone");
   }
 });
 
@@ -1288,15 +1291,27 @@ document.addEventListener("drop", e => {
   const data = e.dataTransfer.getData("text/plain");
   const [type, ...ids] = data.split("-");
   const target = e.target.closest(".edit-cat, .edit-svc");
-  if (!target) return;
+  const colZoneEl = e.target.closest(".edit-col-zone");
+  if (!target && !colZoneEl) return;
   const p = page();
-  
-  const rect = target.getBoundingClientRect();
-  const midpoint = rect.top + rect.height / 2;
-  const insertBefore = e.clientY < midpoint;
-  
+
   if (type === "cat") {
     const fromIndex = parseInt(ids[0]);
+
+    if (!target && colZoneEl) {
+      // Dropped on empty column zone — just reassign column
+      const targetCol = parseInt(colZoneEl.dataset.colZone) || 1;
+      if ((p.categories[fromIndex].column || 1) !== targetCol) {
+        p.categories[fromIndex].column = targetCol;
+        saveConfig(); render();
+      }
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    const insertBefore = e.clientY < midpoint;
+
     let toIndex;
     if (target.classList.contains("edit-cat")) {
       toIndex = parseInt(target.querySelector("[data-cat]").dataset.cat);
@@ -1305,8 +1320,9 @@ document.addEventListener("drop", e => {
       toIndex = parseInt(catEl.querySelector("[data-cat]").dataset.cat);
     }
     if (fromIndex !== toIndex) {
+      // Inherit the target's column (handles cross-column moves transparently)
+      p.categories[fromIndex].column = p.categories[toIndex].column || 1;
       const [cat] = p.categories.splice(fromIndex, 1);
-      // After removing fromIndex, indices above it shift down by 1
       let insertAt = insertBefore ? toIndex : toIndex + 1;
       if (fromIndex < toIndex) insertAt--;
       p.categories.splice(insertAt, 0, cat);
