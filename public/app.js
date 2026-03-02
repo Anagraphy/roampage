@@ -1070,7 +1070,7 @@ document.addEventListener("click",e=>{
     // Backups (per-page)
     case"open-backups":{fetch("/api/backups").then(r=>r.json()).then(d=>{backups=d;backupModal=true;render();}).catch(()=>{backupModal=true;render();});break;}
     case"backup-close":backupModal=false;render();break;
-    case"backup-now":{(async()=>{for(const pg of config.pages){const slug=pageSlug(pg);const exp=JSON.parse(JSON.stringify(pg));await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})});}const d=await fetch("/api/backups").then(r=>r.json());backups=d;render();})();break;}
+    case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})});const d=await fetch("/api/backups").then(r=>r.json());backups=d;render();})();break;}
     case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"?"))break;
       (async()=>{
         const r=await fetch("/api/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
