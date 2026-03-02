@@ -595,8 +595,10 @@ function renderWallpaperEditor(){
 }
 
 function applyTextColor(){
-  const shell=document.getElementById("shell");
-  if(shell)shell.style.color=config.textColor||"";
+  let tag=document.getElementById("roampage-text-color");
+  if(!config.textColor){if(tag)tag.remove();return;}
+  if(!tag){tag=document.createElement("style");tag.id="roampage-text-color";document.head.appendChild(tag);}
+  tag.textContent=`.cat-title,.svc-desc{color:${config.textColor}!important}`;
 }
 
 function applyWallpaper(){
