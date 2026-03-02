@@ -558,12 +558,11 @@ function renderBackupModal(){
   const list=backups.length?backups.map(b=>{
     const d=new Date(b.date);
     const label=b.name.includes("-auto-")?"🔄 Auto":b.name.includes("-manual-")?"💾 Manual":b.name.includes("-pre-restore-")?"🔙 Pre-restore":"📄 Backup";
-    const pageSlugPart=b.name.replace(/-(?:manual|auto|pre-restore)-\d{4}-.*$/, "");
     const dateStr=d.toLocaleDateString([],{day:"numeric",month:"short",year:"numeric"})+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
     const size=(b.size/1024).toFixed(1)+"KB";
-    return`<div class="integ-row"><span class="name">${label} <span style="color:#94a3b8;font-size:11px;font-weight:600">${h(pageSlugPart)}</span> <span style="color:#64748b;font-size:11px">${dateStr}</span></span><span class="meta">${size}</span><button class="btn-small" style="padding:2px 8px;font-size:10px" data-action="restore-backup" data-name="${h(b.name)}">Restore</button><button class="icon-btn danger" style="padding:2px 4px" data-action="delete-backup" data-name="${h(b.name)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;
+    return`<div class="integ-row"><span class="name">${label} <span style="color:#64748b;font-size:11px">${dateStr}</span></span><span class="meta">${size}</span><button class="btn-small" style="padding:2px 8px;font-size:10px" data-action="restore-backup" data-name="${h(b.name)}">Restore</button><button class="icon-btn danger" style="padding:2px 4px" data-action="delete-backup" data-name="${h(b.name)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;
   }).join(""):`<div style="color:#64748b;font-size:12px;text-align:center;padding:12px">No backups yet</div>`;
-  return`<div class="overlay" id="backup-overlay"><div class="json-modal"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700;color:#e2e8f0">📦 Backups — All pages</span><span style="font-size:11px;color:#64748b">Auto every Sunday 3AM</span></div><div class="integ-list" style="max-height:300px;overflow-y:auto">${list}</div><div class="json-actions"><button class="btn-small" data-action="backup-close">Close</button><button class="btn-small" style="background:rgba(34,197,94,.2);border-color:rgba(34,197,94,.4);color:#22c55e" data-action="backup-now">💾 Backup now</button></div></div></div>`;
+  return`<div class="overlay" id="backup-overlay"><div class="json-modal"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700;color:#e2e8f0">📦 Backups — ${h(page().title||"Page")}</span><span style="font-size:11px;color:#64748b">Auto every Sunday 3AM</span></div><div class="integ-list" style="max-height:300px;overflow-y:auto">${list}</div><div class="json-actions"><button class="btn-small" data-action="backup-close">Close</button><button class="btn-small" style="background:rgba(34,197,94,.2);border-color:rgba(34,197,94,.4);color:#22c55e" data-action="backup-now">💾 Backup now</button></div></div></div>`;
 }
 // ═══════════════════════════════════════════════════════════════
 // EDIT MODE RENDERS
@@ -1068,9 +1067,9 @@ document.addEventListener("click",e=>{
     case"json-import-all":doJsonImportAll();break;
 
     // Backups (per-page)
-    case"open-backups":{fetch("/api/backups").then(r=>r.json()).then(d=>{backups=d;backupModal=true;render();}).catch(()=>{backupModal=true;render();});break;}
+    case"open-backups":{const slug=pageSlug(p);fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r=>r.json()).then(d=>{backups=d;backupModal=true;render();}).catch(()=>{backupModal=true;render();});break;}
     case"backup-close":backupModal=false;render();break;
-    case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})});const d=await fetch("/api/backups").then(r=>r.json());backups=d;render();})();break;}
+    case"backup-now":{(async()=>{const slug=pageSlug(p);const exp=JSON.parse(JSON.stringify(p));await fetch("/api/backups",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page:exp,slug})});const d=await fetch("/api/backups?slug="+encodeURIComponent(slug)).then(r=>r.json());backups=d;render();})();break;}
     case"restore-backup":{const name=btn.dataset.name;if(!confirm("Restore this backup for page \""+p.title+"\"?"))break;
       (async()=>{
         const r=await fetch("/api/backups/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
@@ -1082,7 +1081,7 @@ document.addEventListener("click",e=>{
           alert("⚠ Restore failed"+(isKeyErr?"\n\nThis backup was encrypted with a different key (e.g. from a previous container run).\nSet a fixed ENCRYPTION_KEY in your docker-compose.yml to avoid this.":"\n\n"+msg));
         }
       })();break;}
-    case"delete-backup":{const name=btn.dataset.name;fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups")).then(r=>r.json()).then(d=>{backups=d;render();});break;}
+    case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
 
     // Wallpaper delete
     case"del-wallpaper":{const wp=btn.dataset.wp;const p2=page();const old=wp==="desktop"?p2.wallpaperDesktop:p2.wallpaperMobile;if(old){const fname=old.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}if(wp==="desktop")p2.wallpaperDesktop="";else p2.wallpaperMobile="";saveConfig();render();break;}
