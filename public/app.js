@@ -847,7 +847,7 @@ function render(){
   }
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
-  const colPick=editMode&&!mobile?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n}</button>`).join("")}</div>`:"";
+  const colPick=editMode&&!mobile?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:11px;color:#64748b;font-weight:600">colonnes</span>${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n}</button>`).join("")}</div>`:"";
   const headerInner=editMode
     ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
