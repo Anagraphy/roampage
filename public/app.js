@@ -254,6 +254,7 @@ function renderWidgetPicker(){
 // ═══════════════════════════════════════════════════════════════
 function renderTag(t){const bg=getTagColor(t);return`<span class="tag" style="background:${bg};color:${tagTextColor(bg)}">${h(t)}</span>`;}
 function renderSvcStatus(svc){
+  if(config.healthcheckEnabled===false)return"";
   const status = getSvcStatus(svc);
   if(!status)return"";
   return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span><span class="status-label ${status}">${status==="checking"?"":status}</span></div>`;
@@ -529,7 +530,8 @@ function renderPopup(svc){
   if(!svc)return"";
   const choices=svc.servers.map((s,i)=>{
     const st=getServerStatus(s.url);
-    return`<a class="popup-choice" href="${h(autoPrefix(s.url))}" target="_blank" rel="noopener noreferrer" data-popup-close><span class="popup-num">${i+1}</span><span style="flex:1">${h(s.label)}</span><div class="popup-status" data-health-url="${h(s.url)}"><span class="status-dot ${st}"></span><span class="status-label ${st}">${st==="checking"?"":st}</span></div></a>`;
+    const stHtml=config.healthcheckEnabled===false?"":`<div class="popup-status" data-health-url="${h(s.url)}"><span class="status-dot ${st}"></span><span class="status-label ${st}">${st==="checking"?"":st}</span></div>`;
+    return`<a class="popup-choice" href="${h(autoPrefix(s.url))}" target="_blank" rel="noopener noreferrer" data-popup-close><span class="popup-num">${i+1}</span><span style="flex:1">${h(s.label)}</span>${stHtml}</a>`;
   }).join("");
   return`<div class="overlay" id="popup-overlay"><div class="popup"><div class="popup-header"><img class="popup-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><div><div class="popup-title">${h(svc.name)}</div><div class="popup-sub">Choose a server</div></div></div>${choices}</div></div>`;
 }
