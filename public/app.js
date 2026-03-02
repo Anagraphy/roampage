@@ -916,7 +916,9 @@ function render(){
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
   const colPick=editMode&&!mobile?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n} column${n>1?"s":""}</button>`).join("")}</div>`:"";
-  const lockBtnHtml=!editMode&&p.pinEnabled&&!p.locked?`<button class="btn-lock" data-action="lock-page" data-page-id="${h(p.id)}" title="Lock page">🔒</button>`:"";
+  const isProtected=p.pinEnabled||(config._auth&&config._auth.globalPinEnabled);
+  const lockScope=(config._auth&&config._auth.globalPinEnabled)?"global":p.id;
+  const lockBtnHtml=!editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="${h(lockScope)}" title="Lock page">🔒</button>`:"";
   const headerInner=editMode
     ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
@@ -1081,10 +1083,10 @@ document.addEventListener("click",e=>{
   switch(action){
     case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;}render();if(!editMode)startHealthLoop();break;}
     // Lock / unlock (PIN auth)
-    case"lock-page":{const pid=btn.dataset.pageId;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:pid})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
-    case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;if(lockPinDigits.length===4){submitUnlock(page().id,lockPinDigits);}else{render();}}break;}
+    case"lock-scope":{const scope=btn.dataset.scope;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
+    case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;render();if(lockPinDigits.length===4){submitUnlock(page().lockScope||page().id,lockPinDigits);}}break;}
     case"pin-backspace":{if(lockPinDigits.length>0){lockPinDigits=lockPinDigits.slice(0,-1);render();}break;}
-    case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().id,inp.value);break;}
+    case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().lockScope||page().id,inp.value);break;}
     // Security editor (setpin)
     case"set-global-pin":pinFormTarget="global";pinFormType="pin";render();break;
     case"set-page-pin":pinFormTarget=page().id;pinFormType="pin";render();break;
@@ -1316,7 +1318,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target.id === "lock-password-input") {
     e.preventDefault();
     const inp = e.target;
-    if (inp.value.trim()) submitUnlock(page().id, inp.value);
+    if (inp.value.trim()) submitUnlock(page().lockScope||page().id, inp.value);
   }
 });
 

@@ -326,6 +326,7 @@ function stripAndMaskConfig(rawConfig, session) {
         else lockType = rawConfig.auth.globalPin.type || "pin";
         pg.locked = true;
         pg.lockType = lockType;
+        pg.lockScope = hasPgPin ? pg.id : "global";
         pg.categories = [];
       }
     }
@@ -498,6 +499,7 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       delete pg.locked;
       delete pg.pinEnabled;
       delete pg.lockType;
+      delete pg.lockScope;
     }
     writeConfig(body);
     configVersion = Date.now();
@@ -1134,26 +1136,6 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (r
 
   writeConfig(rawConfig);
   configVersion = Date.now();
-
-  // Auto-unlock: after setting a new PIN, update session so the admin keeps access
-  if (!removing) {
-    let token;
-    const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
-    if (cookieMatch && sessions.has(cookieMatch[1])) {
-      token = cookieMatch[1];
-    } else {
-      token = generateToken();
-      sessions.set(token, { unlockedPages: new Set() });
-    }
-    const sess = sessions.get(token);
-    if (scope === "global") {
-      sess.unlockedPages = "global";
-    } else if (sess.unlockedPages !== "global") {
-      if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
-      sess.unlockedPages.add(scope);
-    }
-    setSessionCookie(res, token);
-  }
 
   res.json({ ok: true, _version: configVersion });
 });
