@@ -570,6 +570,12 @@ function renderTagsEditor(svc,ci,si){const pills=(svc.tags||[]).map(t=>`<span cl
 
 function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t=>{const bg=getTagColor(t);return`<div style="display:inline-flex;gap:4px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:4px 6px"><input type="color" value="${bg}" data-action="recolor-tag" data-tag="${h(t)}" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;padding:0;border-radius:4px"><input class="edit-input" style="width:80px;padding:4px 6px;text-transform:uppercase;font-weight:700;font-size:10px;background:transparent;border:none" value="${h(t)}" data-action="rename-tag" data-old="${h(t)}"><button class="icon-btn danger" style="padding:3px" data-action="delete-tag" data-tag="${h(t)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;}).join("");return`<div class="edit-section"><label class="edit-label">Tag definitions</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${items}<div style="display:inline-flex;gap:4px;align-items:center"><input class="new-tag-input" id="new-tag-name" placeholder="New tag"><button class="btn-browse" style="padding:4px 10px" data-action="add-global-tag">+</button></div></div></div>`;}
 
+function renderTextColorEditor(){
+  const color=config.textColor||"";
+  const resetBtn=color?`<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px">↩ Défaut</button>`:"";
+  return`<div class="edit-section"><label class="edit-label">Couleur du texte</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""} ${resetBtn}</div></div>`;
+}
+
 function renderLogoEditor(){
   const logoSrc=config.logoUrl||"/logo.png";
   const isCustom=!!config.logoUrl;
@@ -586,6 +592,11 @@ function renderWallpaperEditor(){
   const preview=dsk?`<img class="wallpaper-preview" src="${h(dsk)}" alt="Wallpaper">`:`<div class="wallpaper-preview" style="display:flex;align-items:center;justify-content:center;color:#64748b;font-size:11px">No wallpaper</div>`;
   const del=dsk?`<button class="icon-btn danger" style="padding:4px" data-action="del-wallpaper" data-wp="desktop"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:"";
   return`<div class="edit-section"><label class="edit-label">Wallpaper</label>${preview}<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><label class="wp-upload-btn">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-wallpaper" data-wp="desktop"></label>${del}<span style="font-size:10px;color:#64748b">Auto-compressed for fast loading</span></div></div>`;
+}
+
+function applyTextColor(){
+  const shell=document.getElementById("shell");
+  if(shell)shell.style.color=config.textColor||"";
 }
 
 function applyWallpaper(){
@@ -798,7 +809,7 @@ function render(){
   let body;
   if(editMode){
     const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
-    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
@@ -813,6 +824,7 @@ function render(){
   app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}<h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
   document.title=p.title||"Roampage";
   applyWallpaper();
+  applyTextColor();
   startClocks();
   if(editMode)setTimeout(initPellEditors,0);
   else{setTimeout(initHomeTextWidgets,0);if(integCurrentPage!==config.currentPage)startIntegrations();else repaintIntegrations();}
@@ -1094,6 +1106,9 @@ document.addEventListener("click",e=>{
       })();break;}
     case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
 
+    // Text color
+    case"reset-text-color":config.textColor="";applyTextColor();saveConfig();render();break;
+
     // Logo
     case"del-logo":{if(config.logoUrl){const fname=config.logoUrl.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}config.logoUrl="";saveConfig();render();break;}
     case"toggle-logo-hidden":config.logoHidden=!config.logoHidden;saveConfig();render();break;
@@ -1122,6 +1137,7 @@ document.addEventListener("input",e=>{
     case"edit-svc-desc":p.categories[ci].services[si].description=el.value;saveConfig();break;
     case"edit-srv-label":p.categories[ci].services[si].servers[sri].label=el.value;saveConfig();break;
     case"edit-srv-url":p.categories[ci].services[si].servers[sri].url=el.value;saveConfig();break;
+    case"set-text-color":config.textColor=el.value;applyTextColor();saveConfig();break;
     case"icon-search":iconBrowserSearch=el.value;renderIconBrowserContent();break;
     case"rename-tag":{const old=el.dataset.old,nw=el.value.trim().toUpperCase();if(nw&&nw!==old&&!p.tags[nw]){p.tags[nw]=p.tags[old];delete p.tags[old];for(const cat of p.categories)for(const svc of cat.services)svc.tags=(svc.tags||[]).map(t=>t===old?nw:t);el.dataset.old=nw;saveConfig();}break;}
     // Weather city search input
