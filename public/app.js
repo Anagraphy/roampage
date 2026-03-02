@@ -762,14 +762,22 @@ function renderEditService(svc,ci,si,total){
   const hcStyle=hcOn?'background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e':'background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5';
   return`<div class="edit-svc" draggable="false"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><img class="edit-svc-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><span class="edit-svc-name">${h(svc.name)||"New Service"}</span><div style="display:flex;gap:4px">${up}${dn}<button class="icon-btn danger" data-action="del-svc" data-cat="${ci}" data-svc="${si}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:none"><div><label class="edit-label">Name</label><input class="edit-input" value="${h(svc.name)}" data-action="edit-svc-name" data-cat="${ci}" data-svc="${si}"></div><div><label class="edit-label">Icon</label><div style="display:flex;gap:6px;align-items:center"><input class="edit-input" style="flex:1" value="${h(svc.icon)}" data-action="edit-svc-icon" data-cat="${ci}" data-svc="${si}" placeholder="Icon URL or browse →"><button class="btn-browse" data-action="open-icon-browser" data-cat="${ci}" data-svc="${si}">🔍 Browse</button></div></div><div><label class="edit-label">Description</label><input class="edit-input" value="${h(svc.description)}" data-action="edit-svc-desc" data-cat="${ci}" data-svc="${si}" placeholder="Optional"></div>${renderTagsEditor(svc,ci,si)}<div><label class="edit-label">Servers</label>${srvs}<button class="btn-add" data-action="add-server" data-cat="${ci}" data-svc="${si}">+ Add server</button></div><div><label class="edit-label">Healthcheck</label><button class="btn-small" style="${hcStyle}" data-action="toggle-svc-healthcheck" data-cat="${ci}" data-svc="${si}">${hcOn?"● Activé":"○ Désactivé"}</button></div></div></div>`;
 }
-function renderEditCategory(cat,ci,total){
-  const p=page();const colCount=p.columns||2;
-  const up=ci>0?`<button class="icon-btn" data-action="move-cat-up" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`:"";
-  const dn=ci<total-1?`<button class="icon-btn" data-action="move-cat-down" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>`:"";
-  const isLeft=(cat.column||1)===1;
-  const colBtn=colCount>=2?`<button class="icon-btn" title="${isLeft?"Déplacer en colonne droite":"Déplacer en colonne gauche"}" data-action="toggle-cat-col" data-cat="${ci}" style="font-size:10px;font-weight:700;min-width:20px;padding:0 4px">${isLeft?"G":"D"}</button>`:"";
+function renderEditCategory(cat,ci,total,colCtx=null){
+  let up,dn,colSwitchBtn;
+  if(colCtx){
+    const{colPos,colTotal,isLeft}=colCtx;
+    up=colPos>0?`<button class="icon-btn" data-action="move-cat-in-col" data-cat="${ci}" data-dir="-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`:"";
+    dn=colPos<colTotal-1?`<button class="icon-btn" data-action="move-cat-in-col" data-cat="${ci}" data-dir="1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>`:"";
+    colSwitchBtn=isLeft
+      ?`<button class="icon-btn" title="Déplacer en colonne droite" data-action="toggle-cat-col" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>`
+      :`<button class="icon-btn" title="Déplacer en colonne gauche" data-action="toggle-cat-col" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>`;
+  }else{
+    up=ci>0?`<button class="icon-btn" data-action="move-cat-up" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`:"";
+    dn=ci<total-1?`<button class="icon-btn" data-action="move-cat-down" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>`:"";
+    colSwitchBtn="";
+  }
   const svcs=cat.services.map((s,i)=>renderEditService(s,ci,i,cat.services.length)).join("");
-  return`<div class="edit-cat" draggable="false"><div class="edit-cat-header"><input class="edit-input title-input" style="flex:1" value="${h(cat.name)}" data-action="edit-cat-name" data-cat="${ci}"><div style="display:flex;gap:4px">${colBtn}${up}${dn}<button class="icon-btn danger" data-action="del-cat" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div>${svcs}<div style="display:flex;gap:8px"><button class="btn-add btn-add-svc" style="flex:1" data-action="add-svc" data-cat="${ci}">+ Add service</button><button class="btn-add btn-add-widget" style="flex:1" data-action="show-widget-picker" data-cat="${ci}">+ Add widget</button></div></div>`;
+  return`<div class="edit-cat" draggable="false"><div class="edit-cat-header"><input class="edit-input title-input" style="flex:1" value="${h(cat.name)}" data-action="edit-cat-name" data-cat="${ci}"><div style="display:flex;gap:4px">${up}${dn}${colSwitchBtn}<button class="icon-btn danger" data-action="del-cat" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div></div>${svcs}<div style="display:flex;gap:8px"><button class="btn-add btn-add-svc" style="flex:1" data-action="add-svc" data-cat="${ci}">+ Add service</button><button class="btn-add btn-add-widget" style="flex:1" data-action="show-widget-picker" data-cat="${ci}">+ Add widget</button></div></div>`;
 }
 
 
@@ -814,9 +822,19 @@ function render(){
 
   let body;
   if(editMode){
-    const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
     const cs=(n)=>n===colCount?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc':'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
-    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"><label class="edit-label" style="margin-top:10px">Colonnes</label><div style="display:flex;gap:6px"><button class="btn-small" style="${cs(1)}" data-action="set-cols" data-cols="1">1 colonne</button><button class="btn-small" style="${cs(2)}" data-action="set-cols" data-cols="2">2 colonnes</button></div></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    const titleSection=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"><label class="edit-label" style="margin-top:10px">Colonnes</label><div style="display:flex;gap:6px"><button class="btn-small" style="${cs(1)}" data-action="set-cols" data-cols="1">1 colonne</button><button class="btn-small" style="${cs(2)}" data-action="set-cols" data-cols="2">2 colonnes</button></div></div>`;
+    const tail=`${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    if(colCount>=2){
+      const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
+      const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
+      const renderCol=(items,isLeft)=>items.map(({c,i},colPos)=>renderEditCategory(c,i,p.categories.length,{colPos,colTotal:items.length,isLeft})).join("");
+      const colHdr=(label)=>`<div style="font-size:11px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${label}</div>`;
+      body=`${titleSection}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div>${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div>${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
+    }else{
+      const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
+      body=`${titleSection}${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${tail}`;
+    }
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
@@ -1001,9 +1019,20 @@ document.addEventListener("click",e=>{
     case"del-cat":p.categories.splice(ci,1);saveConfig();render();break;
     case"move-cat-up":[p.categories[ci],p.categories[ci-1]]=[p.categories[ci-1],p.categories[ci]];saveConfig();render();break;
     case"move-cat-down":[p.categories[ci],p.categories[ci+1]]=[p.categories[ci+1],p.categories[ci]];saveConfig();render();break;
-    case"add-cat":p.categories.push({id:"cat_"+uid(),name:"NEW CATEGORY",column:1,services:[]});saveConfig();render();break;
+    case"add-cat":{const col=parseInt(btn.dataset.col)||1;p.categories.push({id:"cat_"+uid(),name:"NEW CATEGORY",column:col,services:[]});saveConfig();render();break;}
     case"toggle-cat-col":{p.categories[ci].column=p.categories[ci].column===2?1:2;saveConfig();render();break;}
     case"set-cols":{p.columns=parseInt(btn.dataset.cols)||2;saveConfig();render();break;}
+    case"move-cat-in-col":{
+      const dir=parseInt(btn.dataset.dir)||0;
+      const col=p.categories[ci].column||1;
+      const sameCol=p.categories.map((c,idx)=>({c,idx})).filter(({c})=>(c.column||1)===col);
+      const pos=sameCol.findIndex(({idx})=>idx===ci);
+      const tp=pos+dir;
+      if(tp<0||tp>=sameCol.length)break;
+      const ti=sameCol[tp].idx;
+      [p.categories[ci],p.categories[ti]]=[p.categories[ti],p.categories[ci]];
+      saveConfig();render();break;
+    }
 
     // Services
     case"toggle-svc":{const k=`${ci}-${si}`;if(openSvcBodies.has(k))openSvcBodies.delete(k);else openSvcBodies.add(k);const b=$(`#svc-body-${ci}-${si}`),c=$(`#chev-${ci}-${si}`);if(b)b.style.display=openSvcBodies.has(k)?"flex":"none";if(c)c.classList.toggle("open",openSvcBodies.has(k));break;}
