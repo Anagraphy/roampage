@@ -37,6 +37,10 @@ let config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let configVersion=null;
 let editMode=false, popupService=null, jsonModal="", jsonText="", jsonLoading=false, saveTimeout=null;
 let backupModal=false, backups=[];
+// Auth / lock state
+let lockPinDigits="", lockError="";
+let pinFormTarget=null; // null | "global" | pageId — drives the inline Security form in edit mode
+let pinFormType="pin";  // "pin" | "password"
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
 let widgetPickerCat=-1; // -1 = hidden, >=0 = category index
 let bmIconTarget=null; // {ci, si, li} for bookmark icon browser
@@ -152,6 +156,31 @@ async function loadConfig(){
   }
   render();startHealthLoop();pushPageUrl();
 }
+// Re-fetch config from server and re-render (keeps current page / edit mode)
+async function refreshConfig(){
+  try{const res=await fetch("/api/config");const data=await res.json();if(data&&data._version)configVersion=data._version;if(data&&data.pages)config=data;}catch(e){}
+  render();
+}
+
+// Attempt to unlock a page scope. On success, refreshes config and restarts health loop.
+async function submitUnlock(scope,secret){
+  try{
+    const res=await fetch("/api/auth/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope,secret})});
+    if(res.ok){
+      lockPinDigits="";lockError="";
+      await refreshConfig();startHealthLoop();
+    }else{
+      const data=await res.json().catch(()=>({}));
+      lockError=res.status===429?"Too many attempts — wait 15 min":"Incorrect PIN";
+      lockPinDigits="";render();
+      setTimeout(()=>{if(lockError){lockError="";render();}},2500);
+    }
+  }catch(e){
+    lockError="Error — try again";lockPinDigits="";render();
+    setTimeout(()=>{if(lockError){lockError="";render();}},2500);
+  }
+}
+
 function saveConfig(){clearTimeout(saveTimeout);saveTimeout=setTimeout(async()=>{try{const headers={"Content-Type":"application/json"};if(configVersion!=null)headers["If-Match"]=String(configVersion);const res=await fetch("/api/config",{method:"POST",headers,body:JSON.stringify(config)});if(res.status===409){const data=await res.json();configVersion=data.version;fetch("/api/config").then(r=>r.json()).then(d=>{if(d&&d._version)configVersion=d._version;if(d&&d.pages){config=d;render();}const t=document.createElement("div");t.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e2030;border:1px solid rgba(245,158,11,.4);color:#fbbf24;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.5)";t.textContent="Configuration modifiée sur un autre appareil — rechargé.";document.body.appendChild(t);setTimeout(()=>t.remove(),4000);}).catch(()=>{});}else if(res.ok){const d=await res.json();if(d&&d._version)configVersion=d._version;}}catch(e){}},500);}
 
 // ═══════════════════════════════════════════════════════════════
@@ -552,6 +581,41 @@ function renderJsonModal(){if(!jsonModal&&!jsonLoading)return"";if(jsonLoading)r
   else if(jsonModal==="export-all"){title=`⬆ Export — all pages`;actions=`<button class="btn-small" data-action="json-cancel">Cancel</button><button class="btn-small" data-action="json-copy">📋 Copy</button><button class="btn-small" data-action="json-download">⬇ Download</button>`;}
   else{title=`⬇ Import — all pages`;actions=`<button class="btn-small" data-action="json-cancel">Cancel</button><button class="btn-small" data-action="json-paste">📋 Paste</button><label class="btn-small" style="cursor:pointer">⬆ Upload<input type="file" accept=".json" style="display:none" data-action="json-upload"></label><button class="btn-small" style="background:rgba(239,68,68,.3);border-color:rgba(239,68,68,.5);color:#fca5a5" data-action="json-import-all">⚠ Replace all &amp; import</button>`;}
   return`<div class="overlay" id="json-overlay"><div class="json-modal"><div style="font-weight:700;color:#e2e8f0">${title}</div><textarea class="edit-input json-textarea" id="json-text">${h(jsonText)}</textarea><div id="json-error" class="json-error"></div><div class="json-actions" style="flex-wrap:wrap">${actions}</div></div></div>`;}
+// ── Lock overlay (shown instead of page content when page.locked) ───────────
+function renderLockOverlay(pg){
+  const isPin=pg.lockType!=="password";
+  const errHtml=lockError?`<div class="lock-error">${h(lockError)}</div>`:'<div class="lock-error"></div>';
+  let content;
+  if(isPin){
+    const dots=[0,1,2,3].map(i=>`<span class="lock-dot${i<lockPinDigits.length?" filled":""}"></span>`).join("");
+    const keys=[1,2,3,4,5,6,7,8,9,"","0","⌫"].map(k=>{
+      if(k==="")return"<span></span>";
+      if(k==="⌫")return`<button class="pin-key" data-action="pin-backspace">⌫</button>`;
+      return`<button class="pin-key" data-action="pin-digit" data-digit="${k}">${k}</button>`;
+    }).join("");
+    content=`<div class="lock-dots">${dots}</div>${errHtml}<div class="pin-pad">${keys}</div>`;
+  }else{
+    content=`<input class="lock-password-input" type="password" placeholder="Password" id="lock-password-input">${errHtml}<button class="pin-submit" data-action="password-submit">Unlock</button>`;
+  }
+  return`<div class="lock-overlay"><div class="lock-box${lockError?" shake":""}"><div style="font-size:28px;margin-bottom:8px">🔒</div><div style="font-weight:700;font-size:16px;color:#e2e8f0;margin-bottom:16px">${h(pg.title)}</div>${content}</div></div>`;
+}
+
+// ── Security editor (shown inside edit mode tail) ────────────
+function renderSecurityEditor(){
+  const p=page();
+  const hasGlobal=!!(config._auth&&config._auth.globalPinEnabled);
+  const hasPagePin=!!p.pinEnabled;
+  const dot=(on)=>on?`<span style="color:#22c55e;font-size:12px;font-weight:600">● Active</span>`:`<span style="color:#64748b;font-size:12px">○ Not set</span>`;
+  const globalBtns=hasGlobal
+    ?`<button class="btn-small" style="padding:3px 10px" data-action="set-global-pin">Change</button><button class="btn-small" style="padding:3px 10px;color:#ef4444;border-color:rgba(239,68,68,.3)" data-action="remove-global-pin">Remove</button>`
+    :`<button class="btn-small" style="padding:3px 10px" data-action="set-global-pin">Set PIN</button>`;
+  const pageBtns=hasPagePin
+    ?`<button class="btn-small" style="padding:3px 10px" data-action="set-page-pin">Change</button><button class="btn-small" style="padding:3px 10px;color:#ef4444;border-color:rgba(239,68,68,.3)" data-action="remove-page-pin">Remove</button>`
+    :`<button class="btn-small" style="padding:3px 10px" data-action="set-page-pin">Set PIN</button>`;
+  const inlineForm=pinFormTarget?`<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Set secret — ${pinFormTarget==="global"?"Global PIN":"Page PIN"}</div><div style="margin-bottom:8px"><label class="edit-label">Type</label><select class="edit-input" id="pin-form-type" style="width:auto"><option value="pin"${pinFormType==="pin"?" selected":""}>Numeric PIN (4 digits)</option><option value="password"${pinFormType==="password"?" selected":""}>Password</option></select></div><div style="margin-bottom:8px"><label class="edit-label">Secret</label><input class="edit-input" type="password" id="pin-form-input" placeholder="Enter PIN or password" autocomplete="new-password"></div><div style="margin-bottom:8px"><label class="edit-label">Confirm</label><input class="edit-input" type="password" id="pin-form-confirm" placeholder="Confirm" autocomplete="new-password"></div><div id="pin-form-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(139,92,246,.2);border-color:rgba(139,92,246,.4)" data-action="confirm-set-pin">Save</button><button class="btn-small" data-action="cancel-set-pin">Cancel</button></div></div>`:"";
+  return`<div class="edit-section"><label class="edit-label">Security</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">Global PIN (all pages)</span>${dot(hasGlobal)}${globalBtns}</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">Page PIN (this page only)</span>${dot(hasPagePin)}${pageBtns}</div>${inlineForm}</div>`;
+}
+
 function renderBackupModal(){
   if(!backupModal)return"";
   const list=backups.length?backups.map(b=>{
@@ -821,8 +885,12 @@ function render(){
   const tabBar=`<div class="page-tabs">${tabs}${editMode?`<button class="page-tab-add" data-action="add-page">+</button>`:""}</div>`;
 
   let body;
-  if(editMode){
-    const tail=`${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+  if(p.locked){
+    // Page is server-locked — show lock overlay, ignore editMode
+    editMode=false;
+    body=renderLockOverlay(p);
+  } else if(editMode){
+    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
     if(colCount>=2){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
@@ -848,10 +916,11 @@ function render(){
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
   const colPick=editMode&&!mobile?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n} column${n>1?"s":""}</button>`).join("")}</div>`:"";
+  const lockBtnHtml=!editMode&&p.pinEnabled&&!p.locked?`<button class="btn-lock" data-action="lock-page" data-page-id="${h(p.id)}" title="Lock page">🔒</button>`:"";
   const headerInner=editMode
     ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
-  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
+  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div>${lockBtnHtml}<button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
   document.title=p.title||"Roampage";
   applyWallpaper();
   applyTextColor();
@@ -880,6 +949,8 @@ function render(){
     }
   }
   if(iconBrowserOpen){renderIconBrowserContent();const si=document.getElementById("icon-search-input");if(si){si.focus();si.selectionStart=si.value.length;}}
+  // Autofocus password field when lock overlay is showing
+  if(p.locked&&p.lockType==="password"){const lpi=document.getElementById("lock-password-input");if(lpi)setTimeout(()=>lpi.focus(),50);}
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1008,12 +1079,24 @@ document.addEventListener("click",e=>{
   const p=page();
 
   switch(action){
-    case"toggle-edit":editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;}render();if(!editMode)startHealthLoop();break;
+    case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;}render();if(!editMode)startHealthLoop();break;}
+    // Lock / unlock (PIN auth)
+    case"lock-page":{const pid=btn.dataset.pageId;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:pid})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
+    case"pin-digit":{if(lockPinDigits.length<4){lockPinDigits+=btn.dataset.digit;if(lockPinDigits.length===4){submitUnlock(page().id,lockPinDigits);}else{render();}}break;}
+    case"pin-backspace":{if(lockPinDigits.length>0){lockPinDigits=lockPinDigits.slice(0,-1);render();}break;}
+    case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().id,inp.value);break;}
+    // Security editor (setpin)
+    case"set-global-pin":pinFormTarget="global";pinFormType="pin";render();break;
+    case"set-page-pin":pinFormTarget=page().id;pinFormType="pin";render();break;
+    case"remove-global-pin":{if(!confirm("Remove the global PIN?"))break;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:"global",secret:null})});if(res.ok){pinFormTarget=null;await refreshConfig();}})();break;}
+    case"remove-page-pin":{if(!confirm("Remove the PIN for this page?"))break;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:page().id,secret:null})});if(res.ok){pinFormTarget=null;await refreshConfig();}})();break;}
+    case"confirm-set-pin":{const typeEl=document.getElementById("pin-form-type");const inputEl=document.getElementById("pin-form-input");const confirmEl=document.getElementById("pin-form-confirm");const errEl=document.getElementById("pin-form-error");if(!typeEl||!inputEl||!confirmEl)break;const ptype=typeEl.value;const secret=inputEl.value;const conf=confirmEl.value;const showErr=(msg)=>{if(errEl){errEl.textContent=msg;errEl.style.display="";}};if(!secret){showErr("Secret cannot be empty.");break;}if(secret!==conf){showErr("Secrets do not match.");break;}if(ptype==="pin"&&!/^\d{4}$/.test(secret)){showErr("PIN must be exactly 4 digits.");break;}const sc=pinFormTarget;pinFormTarget=null;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret,type:ptype})});if(res.ok){await refreshConfig();}else{pinFormTarget=sc;render();}})();break;}
+    case"cancel-set-pin":pinFormTarget=null;render();break;
     case"toggle-svc-healthcheck":{const svc=p.categories[ci].services[si];svc.healthcheckEnabled=svc.healthcheckEnabled===false;saveConfig();render();break;}
     case"toggle-cols":{p.columns=(p.columns||2)===1?2:1;saveConfig();render();break;}
 
     // Pages
-    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
+    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;pinFormTarget=null;lockPinDigits="";lockError="";saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
     case"add-page":config.pages.push(EMPTY_PAGE());config.currentPage=config.pages.length-1;editMode=true;openSvcBodies.clear();saveConfig();render();break;
     case"del-page":if(config.pages.length>1){config.pages.splice(pi,1);if(config.currentPage>=config.pages.length)config.currentPage=config.pages.length-1;saveConfig();render();}break;
 
@@ -1229,6 +1312,12 @@ document.addEventListener("keydown", e => {
     const si = $(".search-input");
     if (si) si.focus();
   }
+  // Enter on password lock input → submit
+  if (e.key === "Enter" && e.target.id === "lock-password-input") {
+    e.preventDefault();
+    const inp = e.target;
+    if (inp.value.trim()) submitUnlock(page().id, inp.value);
+  }
 });
 
 
@@ -1367,6 +1456,8 @@ window.addEventListener("resize",()=>{
 document.addEventListener("change",e=>{
   const el=e.target;
   if(!el||!el.dataset)return;
+  // Track PIN form type selection for re-renders
+  if(el.id==="pin-form-type"){pinFormType=el.value;return;}
   if(el.dataset.action==="recolor-tag"){page().tags[el.dataset.tag]=el.value;saveConfig();const pill=el.closest("div");if(pill)pill.style.borderColor=el.value;}
   if(el.dataset.action==="set-text-color"){page().textColor=el.value;applyTextColor();saveConfig();render();}
   // Widget field change (for datetime-local, number etc)

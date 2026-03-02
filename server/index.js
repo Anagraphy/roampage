@@ -61,6 +61,7 @@ const configRateLimit = makeRateLimiter(60 * 1000, 30);      //  30 req/min per 
 const uploadRateLimit = makeRateLimiter(60 * 1000, 60);      //  60 uploads/min per IP (bulk import needs headroom)
 const weatherRateLimit = makeRateLimiter(60 * 1000, 30);     //  30 req/min per IP
 const iconsRateLimit = makeRateLimiter(60 * 1000, 60);       //  60 req/min per IP
+const authRateLimit = makeRateLimiter(15 * 60 * 1000, 5);   //   5 unlock attempts per 15min per IP
 
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
@@ -264,6 +265,74 @@ function writeConfig(data) {
 // Run once at startup to clean up any plaintext .bak left from a pre-encryption deployment
 encryptLegacyBak();
 
+// ── Auth: PBKDF2 hashing & session management ─────────────────
+// pbkdf2Sync blocks ~200ms per call — acceptable with a 5/15min/IP rate limit.
+function hashSecret(secret) {
+  const salt = crypto.randomBytes(16);
+  const dk = crypto.pbkdf2Sync(secret, salt, 310000, 32, "sha256");
+  return `pbkdf2:sha256:310000:${salt.toString("base64")}:${dk.toString("base64")}`;
+}
+
+function verifySecret(secret, stored) {
+  const parts = stored.split(":");
+  if (parts.length !== 5 || parts[0] !== "pbkdf2") return false;
+  const salt = Buffer.from(parts[3], "base64");
+  const expected = Buffer.from(parts[4], "base64");
+  const derived = crypto.pbkdf2Sync(secret, salt, parseInt(parts[2]), 32, "sha256");
+  if (derived.length !== expected.length) return false;
+  return crypto.timingSafeEqual(derived, expected);
+}
+
+// In-memory sessions — intentionally lost on restart (forces re-auth after deploy)
+const sessions = new Map(); // token → { unlockedPages: Set<pageId> | "global" }
+const SESSION_COOKIE = "rp_session";
+
+function generateToken() { return crypto.randomBytes(32).toString("hex"); }
+
+function getSession(req) {
+  const m = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
+  return m ? (sessions.get(m[1]) || null) : null;
+}
+
+function setSessionCookie(res, token) {
+  // No Max-Age → session cookie (expires when browser closes)
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+}
+
+// Strip auth hashes and mask locked pages before sending config to client.
+// - Removes cfg.auth (contains hashes) and adds cfg._auth.globalPinEnabled flag
+// - For each page: removes pg.pin, adds pg.pinEnabled, and if locked → pg.locked/lockType/categories=[]
+function stripAndMaskConfig(rawConfig, session) {
+  if (!rawConfig || typeof rawConfig !== "object") return rawConfig;
+  const cfg = JSON.parse(JSON.stringify(rawConfig));
+  const hasGlobalPin = !!(rawConfig.auth && rawConfig.auth.globalPin && rawConfig.auth.globalPin.hash);
+  if (hasGlobalPin) cfg._auth = { globalPinEnabled: true };
+  delete cfg.auth;
+  const globalUnlocked = session && session.unlockedPages === "global";
+  const rawPages = rawConfig.pages || [];
+  for (let i = 0; i < (cfg.pages || []).length; i++) {
+    const pg = cfg.pages[i];
+    const rawPg = rawPages[i];
+    const hasPgPin = !!(rawPg && rawPg.pin && rawPg.pin.hash);
+    if (hasPgPin) pg.pinEnabled = true;
+    delete pg.pin;
+    if (hasPgPin || hasGlobalPin) {
+      const pageUnlocked = session && session.unlockedPages !== "global" &&
+                           session.unlockedPages instanceof Set &&
+                           session.unlockedPages.has(pg.id);
+      if (!globalUnlocked && !pageUnlocked) {
+        let lockType = "pin";
+        if (hasPgPin) lockType = rawPg.pin.type || "pin";
+        else lockType = rawConfig.auth.globalPin.type || "pin";
+        pg.locked = true;
+        pg.lockType = lockType;
+        pg.categories = [];
+      }
+    }
+  }
+  return cfg;
+}
+
 // Skip logging for health checks and integration routes (polled frequently, would generate excessive noise)
 app.use(morgan("combined", { skip: (req) => req.url.startsWith("/api/health") || req.url.startsWith("/health") || req.url.startsWith("/api/integration/") || (req.headers["user-agent"]||"").includes("Go-http-client") }));
 
@@ -391,19 +460,12 @@ app.get("/api/health", healthRateLimit, async (req, res) => {
 });
 
 // ── API: Config (read/write) ─────────────────────────────────
-// ⚠ No authentication is required to read or write the config.
-// This is intentional: Roampage is a self-hosted homelab dashboard designed to
-// run on a trusted local network. Adding auth would require credential management,
-// and most homelabs already enforce access control at the network/reverse-proxy
-// level (VPN, Authelia, Authentik, nginx basic auth, etc.).
-//
-// If you expose Roampage to the internet, make sure to add authentication at
-// the reverse-proxy layer. Consider using Authelia or similar before exposing.
 app.get("/api/config", configRateLimit, (req, res) => {
   try {
     const data = readConfig();
     if (data && typeof data === "object") data._version = configVersion;
-    res.json(data);
+    const session = getSession(req);
+    res.json(stripAndMaskConfig(data, session));
   } catch (err) {
     console.error("Error reading config:", err.message);
     res.status(500).json({ error: "Failed to read config" });
@@ -423,6 +485,20 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
     if (ifMatch !== undefined && ifMatch !== String(configVersion)) {
       return res.status(409).json({ error: "conflict", version: configVersion });
     }
+    // Re-inject sensitive fields from disk so the client (which never sees them) can't wipe them
+    const existing = readConfig() || {};
+    if (existing.auth) body.auth = existing.auth;
+    const pinById = {};
+    for (const pg of existing.pages || []) if (pg.id && pg.pin) pinById[pg.id] = pg.pin;
+    for (const pg of body.pages || []) if (pg.id && pinById[pg.id]) pg.pin = pinById[pg.id];
+    // Remove server-added metadata fields that must not persist to disk
+    delete body._auth;
+    delete body._version;
+    for (const pg of body.pages || []) {
+      delete pg.locked;
+      delete pg.pinEnabled;
+      delete pg.lockType;
+    }
     writeConfig(body);
     configVersion = Date.now();
     res.json({ ok: true, _version: configVersion });
@@ -437,9 +513,13 @@ app.get("/api/config/download", configRateLimit, (req, res) => {
   try {
     const data = readConfig();
     if (data === null) return res.status(404).json({ error: "No config found" });
+    // Strip auth hashes — no hashes in exported files
+    const session = getSession(req);
+    const masked = stripAndMaskConfig(data, session);
+    delete masked._auth;
     res.setHeader("Content-Disposition", "attachment; filename=roampage-config.json");
     res.setHeader("Content-Type", "application/json");
-    res.send(JSON.stringify(data, null, 2));
+    res.send(JSON.stringify(masked, null, 2));
   } catch (err) {
     res.status(500).json({ error: "Failed to download config" });
   }
@@ -947,6 +1027,135 @@ app.get("/api/weather", weatherRateLimit, async (req, res) => {
     console.error("[Weather]", e.message);
     res.status(502).json({ error: e.message });
   }
+});
+
+// ── API: Auth endpoints ───────────────────────────────────────
+
+// Unlock a page or global scope (rate-limited to 5 attempts/15min/IP)
+app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), (req, res) => {
+  const { scope, secret } = req.body || {};
+  if (!scope || !secret) return res.status(400).json({ error: "Missing scope or secret" });
+
+  const rawConfig = readConfig();
+  if (!rawConfig) return res.status(500).json({ error: "No config" });
+
+  const globalHash = rawConfig.auth?.globalPin?.hash;
+  const pagePins = {};
+  for (const pg of rawConfig.pages || []) {
+    if (pg.id && pg.pin?.hash) pagePins[pg.id] = pg.pin.hash;
+  }
+
+  let matchedGlobal = false;
+  let matched = false;
+
+  if (scope === "global") {
+    if (globalHash && verifySecret(String(secret), globalHash)) { matched = true; matchedGlobal = true; }
+  } else {
+    // Try page pin first, then global pin (master key)
+    if (pagePins[scope] && verifySecret(String(secret), pagePins[scope])) {
+      matched = true;
+    } else if (globalHash && verifySecret(String(secret), globalHash)) {
+      matched = true; matchedGlobal = true;
+    }
+  }
+
+  if (!matched) return res.status(401).json({ error: "Incorrect secret" });
+
+  // Get or create session
+  let token;
+  const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
+  if (cookieMatch && sessions.has(cookieMatch[1])) {
+    token = cookieMatch[1];
+  } else {
+    token = generateToken();
+    sessions.set(token, { unlockedPages: new Set() });
+  }
+  const sess = sessions.get(token);
+  if (matchedGlobal || scope === "global") {
+    sess.unlockedPages = "global";
+  } else if (sess.unlockedPages !== "global") {
+    if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
+    sess.unlockedPages.add(scope);
+  }
+  setSessionCookie(res, token);
+  res.json({ ok: true });
+});
+
+// Lock a scope (remove from session)
+app.post("/api/auth/lock", express.json({ limit: "1kb" }), (req, res) => {
+  const { scope } = req.body || {};
+  const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
+  if (!cookieMatch || !sessions.has(cookieMatch[1])) return res.json({ ok: true });
+  const sess = sessions.get(cookieMatch[1]);
+  if (!scope) {
+    sessions.delete(cookieMatch[1]);
+  } else if (scope === "global") {
+    sess.unlockedPages = new Set();
+  } else if (sess.unlockedPages instanceof Set) {
+    sess.unlockedPages.delete(scope);
+  }
+  res.json({ ok: true });
+});
+
+// Query session state
+app.get("/api/auth/session", (req, res) => {
+  const sess = getSession(req);
+  if (!sess) return res.json({ unlockedPages: [] });
+  if (sess.unlockedPages === "global") return res.json({ unlockedPages: "global" });
+  return res.json({ unlockedPages: [...sess.unlockedPages] });
+});
+
+// Set or remove a PIN/password on a page or globally
+// Also auto-unlocks the scope so the admin stays logged in after setting a PIN
+app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), (req, res) => {
+  const { scope, secret, type } = req.body || {};
+  if (!scope) return res.status(400).json({ error: "Missing scope" });
+
+  const rawConfig = readConfig() || {};
+  const removing = secret === null || secret === undefined || secret === "";
+
+  if (scope === "global") {
+    if (removing) {
+      if (rawConfig.auth) delete rawConfig.auth.globalPin;
+      if (rawConfig.auth && Object.keys(rawConfig.auth).length === 0) delete rawConfig.auth;
+    } else {
+      if (!rawConfig.auth) rawConfig.auth = {};
+      rawConfig.auth.globalPin = { hash: hashSecret(String(secret)), type: type || "pin" };
+    }
+  } else {
+    const pg = (rawConfig.pages || []).find(p => p.id === scope);
+    if (!pg) return res.status(404).json({ error: "Page not found" });
+    if (removing) {
+      delete pg.pin;
+    } else {
+      pg.pin = { hash: hashSecret(String(secret)), type: type || "pin" };
+    }
+  }
+
+  writeConfig(rawConfig);
+  configVersion = Date.now();
+
+  // Auto-unlock: after setting a new PIN, update session so the admin keeps access
+  if (!removing) {
+    let token;
+    const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
+    if (cookieMatch && sessions.has(cookieMatch[1])) {
+      token = cookieMatch[1];
+    } else {
+      token = generateToken();
+      sessions.set(token, { unlockedPages: new Set() });
+    }
+    const sess = sessions.get(token);
+    if (scope === "global") {
+      sess.unlockedPages = "global";
+    } else if (sess.unlockedPages !== "global") {
+      if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
+      sess.unlockedPages.add(scope);
+    }
+    setSessionCookie(res, token);
+  }
+
+  res.json({ ok: true, _version: configVersion });
 });
 
 // ── 404 for unknown /api/ routes ─────────────────────────────
