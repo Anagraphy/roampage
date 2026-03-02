@@ -570,6 +570,17 @@ function renderTagsEditor(svc,ci,si){const pills=(svc.tags||[]).map(t=>`<span cl
 
 function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t=>{const bg=getTagColor(t);return`<div style="display:inline-flex;gap:4px;align-items:center;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:4px 6px"><input type="color" value="${bg}" data-action="recolor-tag" data-tag="${h(t)}" style="width:22px;height:22px;border:none;background:transparent;cursor:pointer;padding:0;border-radius:4px"><input class="edit-input" style="width:80px;padding:4px 6px;text-transform:uppercase;font-weight:700;font-size:10px;background:transparent;border:none" value="${h(t)}" data-action="rename-tag" data-old="${h(t)}"><button class="icon-btn danger" style="padding:3px" data-action="delete-tag" data-tag="${h(t)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>`;}).join("");return`<div class="edit-section"><label class="edit-label">Tag definitions</label><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${items}<div style="display:inline-flex;gap:4px;align-items:center"><input class="new-tag-input" id="new-tag-name" placeholder="New tag"><button class="btn-browse" style="padding:4px 10px" data-action="add-global-tag">+</button></div></div></div>`;}
 
+function renderLogoEditor(){
+  const logoSrc=config.logoUrl||"/logo.png";
+  const isCustom=!!config.logoUrl;
+  const preview=config.logoHidden
+    ?`<div style="height:40px;display:flex;align-items:center;color:#64748b;font-size:11px">Logo masqué</div>`
+    :`<img src="${h(logoSrc)}" style="height:40px;border-radius:6px;object-fit:contain" data-onerr="fade">`;
+  const del=isCustom?`<button class="icon-btn danger" style="padding:4px" data-action="del-logo" title="Revenir au logo par défaut"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:"";
+  const hideStyle=config.logoHidden?'background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5':'';
+  return`<div class="edit-section"><label class="edit-label">Header logo</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${preview}${del}</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><label class="wp-upload-btn">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-logo"></label><button class="btn-small" style="${hideStyle}" data-action="toggle-logo-hidden">${config.logoHidden?"👁 Afficher":"🚫 Masquer"}</button></div></div>`;
+}
+
 function renderWallpaperEditor(){
   const p=page();const dsk=p.wallpaperDesktop||"";
   const preview=dsk?`<img class="wallpaper-preview" src="${h(dsk)}" alt="Wallpaper">`:`<div class="wallpaper-preview" style="display:flex;align-items:center;justify-content:center;color:#64748b;font-size:11px">No wallpaper</div>`;
@@ -787,7 +798,7 @@ function render(){
   let body;
   if(editMode){
     const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
-    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
@@ -798,7 +809,8 @@ function render(){
     body=`${colBtn}<div class="grid cols-${ec}">${gc}</div><div class="hint">Click on a service to choose a server. <span>Middle-click</span> opens the first link.</div>`;
   }
 
-  app.innerHTML=`<div class="header"><div class="header-left"><img src="/logo.png" class="header-logo" alt="Roampage"><h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
+  const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
+  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}<h1>${editMode?"⚙ EDIT":h(p.title)}</h1>${!editMode?`<input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`:""}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
   document.title=p.title||"Roampage";
   applyWallpaper();
   startClocks();
@@ -1082,6 +1094,10 @@ document.addEventListener("click",e=>{
       })();break;}
     case"delete-backup":{const name=btn.dataset.name;const slug=pageSlug(p);fetch("/api/backups/"+encodeURIComponent(name),{method:"DELETE"}).then(()=>fetch("/api/backups?slug="+encodeURIComponent(slug))).then(r=>r.json()).then(d=>{backups=d;render();});break;}
 
+    // Logo
+    case"del-logo":{if(config.logoUrl){const fname=config.logoUrl.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}config.logoUrl="";saveConfig();render();break;}
+    case"toggle-logo-hidden":config.logoHidden=!config.logoHidden;saveConfig();render();break;
+
     // Wallpaper delete
     case"del-wallpaper":{const wp=btn.dataset.wp;const p2=page();const old=wp==="desktop"?p2.wallpaperDesktop:p2.wallpaperMobile;if(old){const fname=old.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}if(wp==="desktop")p2.wallpaperDesktop="";else p2.wallpaperMobile="";saveConfig();render();break;}
 
@@ -1300,6 +1316,18 @@ document.addEventListener("change",e=>{
     }).catch(e=>{console.error("Compress failed",e);el.value="";});
   }
   // Wallpaper upload
+  if(el.dataset.action==="upload-logo"){
+    const file=el.files[0];if(!file)return;
+    const input=el;
+    compressImage(file,400,400,0.9).then(async({dataUrl})=>{
+      try{
+        const res=await fetch("/api/wallpaper",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"logo_custom.webp",data:dataUrl})});
+        const data=await res.json();
+        if(data.url){config.logoUrl=data.url+"?t="+Date.now();saveConfig();render();}
+      }catch(e){console.error("Logo upload failed",e);}
+      input.value="";
+    }).catch(e=>{console.error("Compress failed",e);el.value="";});
+  }
   if(el.dataset.action==="upload-wallpaper"){
     const file=el.files[0];if(!file)return;
     const wp=el.dataset.wp;
