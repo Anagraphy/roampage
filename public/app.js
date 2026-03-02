@@ -25,7 +25,6 @@ const EMPTY_PAGE = () => ({id:"page_"+uid(),title:"New Page",tags:{PWA:"#8b5cf6"
 
 const DEFAULT_CONFIG = {
   currentPage: 0,
-  healthcheckEnabled: true,
   pages: [{
     id:"page_1", title:"ROAMPAGE",
     tags:{PWA:"#8b5cf6",APP:"#10b981",SELFHOSTED:"#6b7280",CLOUD:"#f59e0b",DOCKER:"#3b82f6",API:"#ec4899"},
@@ -191,7 +190,7 @@ async function runHealthChecks(){
   const urls=[];
   // Only check services on the current page to avoid generating excessive requests
   // (checking all pages at once would trigger CrowdSec rate-limiting rules)
-  for(const cat of page().categories)for(const svc of cat.services)for(const srv of svc.servers||[])if(srv.url){const u=autoPrefix(srv.url);if(!urls.includes(u))urls.push(u);if(!healthByUrl[u])healthByUrl[u]="checking";}
+  for(const cat of page().categories)for(const svc of cat.services)if(svc.healthcheckEnabled!==false)for(const srv of svc.servers||[])if(srv.url){const u=autoPrefix(srv.url);if(!urls.includes(u))urls.push(u);if(!healthByUrl[u])healthByUrl[u]="checking";}
   updateAllStatus();
   // Sequential checks with a short delay to avoid triggering CrowdSec / WAF
   // rate-limiting rules that fire on rapid bursts from the same IP.
@@ -207,6 +206,7 @@ async function runHealthChecks(){
 function getServerStatus(url){return healthByUrl[autoPrefix(url)]||"checking";}
 function getSvcStatus(svc){
   if(svc.type)return null; // widgets have no status
+  if(svc.healthcheckEnabled===false)return null;
   const servers=(svc.servers||[]).filter(s=>s.url);
   if(!servers.length)return"checking";
   // Green only if ALL servers are up; red if ALL down; orange if partial or still loading
@@ -230,7 +230,7 @@ function updateAllStatus(){
     }}
   });
 }
-function startHealthLoop(){if(config.healthcheckEnabled===false){stopHealthLoop();return;}if(healthInterval)clearInterval(healthInterval);runHealthChecks();healthInterval=setInterval(runHealthChecks,60000);}
+function startHealthLoop(){if(healthInterval)clearInterval(healthInterval);runHealthChecks();healthInterval=setInterval(runHealthChecks,60000);}
 function stopHealthLoop(){if(healthInterval){clearInterval(healthInterval);healthInterval=null;}}
 
 // ═══════════════════════════════════════════════════════════════
@@ -254,7 +254,6 @@ function renderWidgetPicker(){
 // ═══════════════════════════════════════════════════════════════
 function renderTag(t){const bg=getTagColor(t);return`<span class="tag" style="background:${bg};color:${tagTextColor(bg)}">${h(t)}</span>`;}
 function renderSvcStatus(svc){
-  if(config.healthcheckEnabled===false)return"";
   const status = getSvcStatus(svc);
   if(!status)return"";
   return `<div class="status" data-health-svc="${h(svc.id)}"><span class="status-dot ${status}"></span><span class="status-label ${status}">${status==="checking"?"":status}</span></div>`;
@@ -530,7 +529,7 @@ function renderPopup(svc){
   if(!svc)return"";
   const choices=svc.servers.map((s,i)=>{
     const st=getServerStatus(s.url);
-    const stHtml=config.healthcheckEnabled===false?"":`<div class="popup-status" data-health-url="${h(s.url)}"><span class="status-dot ${st}"></span><span class="status-label ${st}">${st==="checking"?"":st}</span></div>`;
+    const stHtml=svc.healthcheckEnabled===false?"":`<div class="popup-status" data-health-url="${h(s.url)}"><span class="status-dot ${st}"></span><span class="status-label ${st}">${st==="checking"?"":st}</span></div>`;
     return`<a class="popup-choice" href="${h(autoPrefix(s.url))}" target="_blank" rel="noopener noreferrer" data-popup-close><span class="popup-num">${i+1}</span><span style="flex:1">${h(s.label)}</span>${stHtml}</a>`;
   }).join("");
   return`<div class="overlay" id="popup-overlay"><div class="popup"><div class="popup-header"><img class="popup-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><div><div class="popup-title">${h(svc.name)}</div><div class="popup-sub">Choose a server</div></div></div>${choices}</div></div>`;
@@ -735,7 +734,9 @@ function renderEditService(svc,ci,si,total){
   const up=si>0?`<button class="icon-btn" data-action="move-svc-up" data-cat="${ci}" data-svc="${si}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`:"";
   const dn=si<total-1?`<button class="icon-btn" data-action="move-svc-down" data-cat="${ci}" data-svc="${si}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>`:"";
   const srvs=(svc.servers||[]).map((srv,sri)=>{const del=svc.servers.length>1?`<button class="icon-btn danger" data-action="del-server" data-cat="${ci}" data-svc="${si}" data-srv="${sri}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:"";return`<div class="server-row"><input class="edit-input server-label-input" value="${h(srv.label)}" data-action="edit-srv-label" data-cat="${ci}" data-svc="${si}" data-srv="${sri}" placeholder="Label"><input class="edit-input" style="flex:1" value="${h(srv.url)}" data-action="edit-srv-url" data-cat="${ci}" data-svc="${si}" data-srv="${sri}" placeholder="URL">${del}</div>`;}).join("");
-  return`<div class="edit-svc" draggable="false"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><img class="edit-svc-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><span class="edit-svc-name">${h(svc.name)||"New Service"}</span><div style="display:flex;gap:4px">${up}${dn}<button class="icon-btn danger" data-action="del-svc" data-cat="${ci}" data-svc="${si}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:none"><div><label class="edit-label">Name</label><input class="edit-input" value="${h(svc.name)}" data-action="edit-svc-name" data-cat="${ci}" data-svc="${si}"></div><div><label class="edit-label">Icon</label><div style="display:flex;gap:6px;align-items:center"><input class="edit-input" style="flex:1" value="${h(svc.icon)}" data-action="edit-svc-icon" data-cat="${ci}" data-svc="${si}" placeholder="Icon URL or browse →"><button class="btn-browse" data-action="open-icon-browser" data-cat="${ci}" data-svc="${si}">🔍 Browse</button></div></div><div><label class="edit-label">Description</label><input class="edit-input" value="${h(svc.description)}" data-action="edit-svc-desc" data-cat="${ci}" data-svc="${si}" placeholder="Optional"></div>${renderTagsEditor(svc,ci,si)}<div><label class="edit-label">Servers</label>${srvs}<button class="btn-add" data-action="add-server" data-cat="${ci}" data-svc="${si}">+ Add server</button></div></div></div>`;
+  const hcOn=svc.healthcheckEnabled!==false;
+  const hcStyle=hcOn?'background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e':'background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5';
+  return`<div class="edit-svc" draggable="false"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><img class="edit-svc-icon" src="${h(svc.icon)}" alt="" data-onerr="hide"><span class="edit-svc-name">${h(svc.name)||"New Service"}</span><div style="display:flex;gap:4px">${up}${dn}<button class="icon-btn danger" data-action="del-svc" data-cat="${ci}" data-svc="${si}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:none"><div><label class="edit-label">Name</label><input class="edit-input" value="${h(svc.name)}" data-action="edit-svc-name" data-cat="${ci}" data-svc="${si}"></div><div><label class="edit-label">Icon</label><div style="display:flex;gap:6px;align-items:center"><input class="edit-input" style="flex:1" value="${h(svc.icon)}" data-action="edit-svc-icon" data-cat="${ci}" data-svc="${si}" placeholder="Icon URL or browse →"><button class="btn-browse" data-action="open-icon-browser" data-cat="${ci}" data-svc="${si}">🔍 Browse</button></div></div><div><label class="edit-label">Description</label><input class="edit-input" value="${h(svc.description)}" data-action="edit-svc-desc" data-cat="${ci}" data-svc="${si}" placeholder="Optional"></div>${renderTagsEditor(svc,ci,si)}<div><label class="edit-label">Servers</label>${srvs}<button class="btn-add" data-action="add-server" data-cat="${ci}" data-svc="${si}">+ Add server</button></div><div><label class="edit-label">Healthcheck</label><button class="btn-small" style="${hcStyle}" data-action="toggle-svc-healthcheck" data-cat="${ci}" data-svc="${si}">${hcOn?"● Activé":"○ Désactivé"}</button></div></div></div>`;
 }
 function renderEditCategory(cat,ci,total){
   const up=ci>0?`<button class="icon-btn" data-action="move-cat-up" data-cat="${ci}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></button>`:"";
@@ -786,9 +787,7 @@ function render(){
   let body;
   if(editMode){
     const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
-    const hcOn=config.healthcheckEnabled!==false;
-    const hcStyle=hcOn?'background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e':'background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5';
-    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" style="${hcStyle}" data-action="toggle-healthcheck">${hcOn?"● Healthcheck activé":"○ Healthcheck désactivé"}</button></div><div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    body=`<div class="edit-section"><label class="edit-label">Page title</label><input class="edit-input" value="${h(p.title)}" data-action="edit-title"></div>${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${renderGlobalTagsEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
   } else if(!p.categories.length){
     body=`<div class="empty-page"><div style="font-size:22px;font-weight:700;color:#e2e8f0;margin-bottom:10px">Welcome to Roampage</div><div style="margin-bottom:20px">Your self-hosted dashboard to organize and access all your services from a single place.</div>Click on <strong>Config</strong> in the top right to get started!</div>`;
   } else {
@@ -956,7 +955,7 @@ document.addEventListener("click",e=>{
 
   switch(action){
     case"toggle-edit":editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;}render();if(!editMode)startHealthLoop();break;
-    case"toggle-healthcheck":config.healthcheckEnabled=config.healthcheckEnabled===false;if(config.healthcheckEnabled!==false)startHealthLoop();else stopHealthLoop();saveConfig();render();break;
+    case"toggle-svc-healthcheck":{const svc=p.categories[ci].services[si];svc.healthcheckEnabled=svc.healthcheckEnabled===false;saveConfig();render();break;}
     case"toggle-cols":columns=columns===1?2:1;render();break;
 
     // Pages
