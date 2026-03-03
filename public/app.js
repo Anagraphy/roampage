@@ -666,7 +666,7 @@ function renderCssEditor(){
   const active=cssScope!==null;
   const css=active?(cssScope==="page"?page().customCss||"":config.customCss||""):"";
   const scopeBtn=(s,label)=>`<button class="btn-small css-scope-btn${cssScope===s?" css-scope-active":""}" data-action="set-css-scope" data-scope="${s}">${label}</button>`;
-  return`<div class="edit-section"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#94a3b8;margin:0"><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6"><span class="edit-label" style="margin:0">Custom CSS</span></label>${active?`<div style="display:flex;gap:4px">${scopeBtn("page","Cette page")}${scopeBtn("global","Toutes les pages")}</div>`:""}</div>${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* CSS appliqué sur cette page uniquement */":"/* CSS appliqué sur toutes les pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
+  return`<div class="edit-section"><div style="display:flex;align-items:center;margin-bottom:6px"><label class="edit-label" style="margin:0;flex:1">Custom CSS</label><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6;cursor:pointer;width:14px;height:14px"></div>${active?`<div style="display:flex;gap:4px;margin-bottom:6px">${scopeBtn("page","Cette page")}${scopeBtn("global","Toutes les pages")}</div>`:""  }${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* Cette page uniquement */":"/* Toutes les pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
 }
 
 function applyTextColor(){
