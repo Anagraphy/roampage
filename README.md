@@ -1,6 +1,43 @@
 # <img src="public/favicon.png" width="32" height="32" style="vertical-align:middle"> Roampage
 A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
 
+## What's new in v1.1
+
+### Rich layout options
+
+The service configuration panel has been redesigned with a full set of layout controls: adjust icon size, choose between list and grid layouts, set the number of columns per category, and reorder everything inline with drag handles.
+
+![Better layout options](assets/better%20layout%20options.png)<br>
+*New per-category and per-service layout controls — all configurable directly from the browser.*
+
+---
+
+### PIN-protected pages
+
+Lock any page behind a numeric PIN. When a PIN is set, a lock icon appears next to the page tab. Visitors see a clean PIN pad overlay before accessing the page content.
+
+![PIN lock](assets/pin.png)<br>
+*PIN pad overlay — protect sensitive pages without needing a full authentication system.*
+
+---
+
+### Custom CSS per page
+
+Each page now has a dedicated CSS field. Write any valid CSS and it is applied instantly — override fonts, colors, spacing, or completely retheme the dashboard to match your style.
+
+![Custom CSS](assets/custom%20css.png)<br>
+*Custom CSS in action — a terminal-style green-on-black theme applied to a single page.*
+
+---
+
+### Other improvements in v1.1
+
+- **Custom header text** — Set a custom title for each page, displayed in the top-left header
+- **Text color control** — Choose a custom text color per page to match your wallpaper or CSS theme
+- **Config panel polish** — Smoother transitions, better button placement, and clearer section separators
+
+---
+
 ## Features
 
 ### Dashboard
@@ -17,6 +54,9 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **Encrypted config** — Configuration and backups are encrypted at rest with AES-256-GCM
 - **Import/Export** — Export and import your full config as JSON, with embedded images
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
+- **PIN-protected pages** — Lock individual pages behind a numeric PIN
+- **Custom CSS per page** — Apply any CSS to a single page without affecting others
+- **Custom header & text color** — Personalize the page title and text color from the config panel
 
 - **Widgets** — Clock, Weather, Bookmarks, Text, Image, Iframe, Countdown, Separator, System monitor
 
