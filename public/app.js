@@ -923,7 +923,7 @@ function render(){
     editMode=false;
     body=renderLockOverlay(p);
   } else if(editMode){
-    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderPageCssEditor()}${renderLogoEditor()}${renderWallpaperEditor()}${renderGlobalCssEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${renderPageCssEditor()}${renderGlobalCssEditor()}</div>${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
     if(colCount>=2&&!mobile){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
@@ -1271,9 +1271,6 @@ document.addEventListener("click",e=>{
     // Text color
     case"reset-text-color":page().textColor="";applyTextColor();saveConfig();render();break;
 
-    // Custom CSS
-    case"toggle-global-css":globalCssOpen=!globalCssOpen;if(!globalCssOpen){config.customCss="";applyCustomCss();saveConfig();}render();break;
-    case"toggle-page-css":pageCssOpen=!pageCssOpen;if(!pageCssOpen){page().customCss="";applyCustomCss();saveConfig();}render();break;
 
     // Logo
     case"del-logo":{if(config.logoUrl){const fname=config.logoUrl.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}config.logoUrl="";saveConfig();render();break;}
@@ -1345,6 +1342,15 @@ document.addEventListener("input",e=>{
     case"edit-bm-label":{const li=parseInt(el.dataset.li);p.categories[ci].services[si].links[li].label=el.value;saveConfig();break;}
     case"edit-bm-url":{const li=parseInt(el.dataset.li);p.categories[ci].services[si].links[li].url=el.value;saveConfig();break;}
     case"edit-bm-icon":{const li=parseInt(el.dataset.li);p.categories[ci].services[si].links[li].icon=el.value;saveConfig();break;}
+  }
+});
+
+document.addEventListener("change",e=>{
+  const el=e.target;if(el.tagName!=="INPUT"||el.type!=="checkbox")return;
+  const action=el.dataset.action;
+  switch(action){
+    case"toggle-global-css":globalCssOpen=el.checked;if(!globalCssOpen){config.customCss="";applyCustomCss();saveConfig();}render();break;
+    case"toggle-page-css":pageCssOpen=el.checked;if(!pageCssOpen){page().customCss="";applyCustomCss();saveConfig();}render();break;
   }
 });
 
