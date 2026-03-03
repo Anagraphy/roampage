@@ -666,7 +666,7 @@ function renderCssEditor(){
   const active=cssScope!==null;
   const css=active?(cssScope==="page"?page().customCss||"":config.customCss||""):"";
   const scopeBtn=(s,label)=>`<button class="btn-small css-scope-btn${cssScope===s?" css-scope-active":""}" data-action="set-css-scope" data-scope="${s}">${label}</button>`;
-  return`<div class="edit-section"><div style="display:flex;align-items:center;margin-bottom:6px"><label class="edit-label" style="margin:0;flex:1">Custom CSS</label><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6;cursor:pointer;width:14px;height:14px"></div>${active?`<div style="display:flex;gap:4px;margin-bottom:6px">${scopeBtn("page","This page")}${scopeBtn("global","All pages")}</div>`:""  }${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* This page only */":"/* All pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
+  return`<div class="edit-section"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:${active?"8":"0"}px"><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6;cursor:pointer;flex-shrink:0"><span class="edit-label" style="margin:0">Custom CSS</span></label>${active?`<div style="display:flex;gap:4px;margin-bottom:6px">${scopeBtn("page","This page")}${scopeBtn("global","All pages")}</div>`:""  }${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* This page only */":"/* All pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
 }
 
 function applyTextColor(){
