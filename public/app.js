@@ -641,18 +641,18 @@ function renderGlobalTagsEditor(){const tags=getAllTags();const items=tags.map(t
 function renderTextColorEditor(){
   const color=page().textColor||"";
   const resetStyle=color?'':'opacity:.4;cursor:not-allowed';
-  return`<div class="edit-section"><label class="edit-label">Text color</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""}<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px;${resetStyle}" ${color?"":"disabled"}>↩ Défaut</button></div></div>`;
+  return`<div class="edit-section"><label class="edit-label">Text color</label><div style="display:flex;gap:8px;align-items:center"><input type="color" value="${color||"#e2e8f0"}" data-action="set-text-color" style="width:36px;height:30px;border:1px solid rgba(255,255,255,.1);border-radius:6px;background:rgba(255,255,255,.06);cursor:pointer;padding:2px">${color?`<span style="font-size:12px;color:#94a3b8">${h(color)}</span>`:""}<button class="btn-small" data-action="reset-text-color" style="padding:3px 8px;${resetStyle}" ${color?"":"disabled"}>↩ Reset</button></div></div>`;
 }
 
 function renderLogoEditor(){
   const logoSrc=config.logoUrl||"/logo.png";
   const isCustom=!!config.logoUrl;
   const preview=config.logoHidden
-    ?`<div style="height:40px;display:flex;align-items:center;color:#64748b;font-size:11px">Logo masqué</div>`
+    ?`<div style="height:40px;display:flex;align-items:center;color:#64748b;font-size:11px">Logo hidden</div>`
     :`<img src="${h(logoSrc)}" style="height:40px;border-radius:6px;object-fit:contain" data-onerr="fade">`;
-  const del=isCustom?`<button class="icon-btn danger" style="padding:4px" data-action="del-logo" title="Revenir au logo par défaut"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:"";
+  const del=isCustom?`<button class="icon-btn danger" style="padding:4px" data-action="del-logo" title="Revert to default logo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`:"";
   const hideStyle=config.logoHidden?'background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5':'';
-  return`<div class="edit-section"><label class="edit-label">Header logo</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${preview}${del}</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><label class="wp-upload-btn">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-logo"></label><button class="btn-small" style="${hideStyle}" data-action="toggle-logo-hidden">${config.logoHidden?"👁 Afficher":"🚫 Masquer"}</button></div></div>`;
+  return`<div class="edit-section"><label class="edit-label">Header logo</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${preview}${del}</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><label class="wp-upload-btn">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-logo"></label><button class="btn-small" style="${hideStyle}" data-action="toggle-logo-hidden">${config.logoHidden?"👁 Show":"🚫 Hide"}</button></div></div>`;
 }
 
 function renderWallpaperEditor(){
@@ -666,7 +666,7 @@ function renderCssEditor(){
   const active=cssScope!==null;
   const css=active?(cssScope==="page"?page().customCss||"":config.customCss||""):"";
   const scopeBtn=(s,label)=>`<button class="btn-small css-scope-btn${cssScope===s?" css-scope-active":""}" data-action="set-css-scope" data-scope="${s}">${label}</button>`;
-  return`<div class="edit-section"><div style="display:flex;align-items:center;margin-bottom:6px"><label class="edit-label" style="margin:0;flex:1">Custom CSS</label><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6;cursor:pointer;width:14px;height:14px"></div>${active?`<div style="display:flex;gap:4px;margin-bottom:6px">${scopeBtn("page","Cette page")}${scopeBtn("global","Toutes les pages")}</div>`:""  }${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* Cette page uniquement */":"/* Toutes les pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
+  return`<div class="edit-section"><div style="display:flex;align-items:center;margin-bottom:6px"><label class="edit-label" style="margin:0;flex:1">Custom CSS</label><input type="checkbox" data-action="toggle-css" ${active?"checked":""} style="accent-color:#8b5cf6;cursor:pointer;width:14px;height:14px"></div>${active?`<div style="display:flex;gap:4px;margin-bottom:6px">${scopeBtn("page","This page")}${scopeBtn("global","All pages")}</div>`:""  }${active?`<textarea class="css-editor" data-action="set-css" placeholder="${cssScope==="page"?"/* This page only */":"/* All pages */"}" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
 }
 
 function applyTextColor(){
@@ -918,17 +918,17 @@ function render(){
     editMode=false;
     body=renderLockOverlay(p);
   } else if(editMode){
-    const divider=`<div style="margin:24px 0 18px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div><span style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap">Options de la page</span><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div></div>`;
-    const appearanceGroup=`<div style="border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;background:rgba(255,255,255,.02);margin-bottom:12px"><div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Apparence</div>${renderWallpaperEditor()}<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:flex-start;margin-top:4px">${renderTextColorEditor()}${renderCssEditor()}${renderLogoEditor()}</div></div>`;
+    const divider=`<div style="margin:24px 0 18px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div><span style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap">Page settings</span><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div></div>`;
+    const appearanceGroup=`<div style="border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;background:rgba(255,255,255,.02);margin-bottom:12px"><div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Appearance</div>${renderWallpaperEditor()}<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:flex-start;margin-top:4px">${renderTextColorEditor()}${renderCssEditor()}${renderLogoEditor()}</div></div>`;
     const actionBtns=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
-    const securitySection=`<div style="margin-top:20px;border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px;background:rgba(239,68,68,.03)"><div style="font-size:10px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">🔒 Sécurité</div>${renderSecurityEditor()}</div>`;
+    const securitySection=`<div style="margin-top:20px;border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px;background:rgba(239,68,68,.03)"><div style="font-size:10px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">🔒 Security</div>${renderSecurityEditor()}</div>`;
     const tail=`${divider}${renderGlobalTagsEditor()}${appearanceGroup}${securitySection}<div style="margin-top:12px">${actionBtns}</div>`;
     if(colCount>=2&&!mobile){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
       const renderCol=(items,isLeft)=>items.map(({c,i},colPos)=>renderEditCategory(c,i,p.categories.length,{colPos,colTotal:items.length,isLeft})).join("");
       const colHdr=(label)=>`<div style="font-size:11px;color:#64748b;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${label}</div>`;
-      body=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="edit-col-zone" data-col-zone="1">${colHdr("Gauche")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div class="edit-col-zone" data-col-zone="2">${colHdr("Droite")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
+      body=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div class="edit-col-zone" data-col-zone="1">${colHdr("Left")}${renderCol(leftItems,true)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="1">+ Add category</button></div><div class="edit-col-zone" data-col-zone="2">${colHdr("Right")}${renderCol(rightItems,false)}<button class="btn-add btn-add-cat" data-action="add-cat" data-col="2">+ Add category</button></div></div>${tail}`;
     }else{
       const cats=p.categories.map((c,i)=>renderEditCategory(c,i,p.categories.length)).join("");
       body=`${cats}<button class="btn-add btn-add-cat" data-action="add-cat">+ Add category</button>${tail}`;
