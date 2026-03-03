@@ -22,7 +22,7 @@ Lock any page behind a numeric PIN. When a PIN is set, a lock icon appears next 
 
 **Custom CSS per page**
 
-Each page now has a dedicated CSS field. Write any valid CSS and it is applied instantly — override fonts, colors, spacing, or completely retheme the dashboard to match your style.
+Each page now has a dedicated CSS field. Write any valid CSS and it is applied instantly - override fonts, colors, spacing, or completely retheme the dashboard to match your style.
 
 ![Custom CSS](assets/custom%20css.png)
 
@@ -30,9 +30,8 @@ Each page now has a dedicated CSS field. Write any valid CSS and it is applied i
 
 ### Improvements
 
-- **Custom header text** — Set a custom title for each page, displayed in the top-left header
-- **Text color control** — Choose a custom text color per page to match your wallpaper or CSS theme
-- **Config panel polish** — Smoother transitions, better button placement, and clearer section separators
+- **Text color control** - Choose a custom text color per page to match your wallpaper or CSS theme
+- **Config panel polish** - Smoother transitions, better button placement, and clearer section separators
 
 ---
 
