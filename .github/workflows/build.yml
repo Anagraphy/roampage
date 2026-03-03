@@ -1,13 +1,11 @@
 name: Build and Push Docker Image
 
 on:
-  workflow_dispatch: # trigger manually only — Docker Hub secrets not configured yet
-  # push:
-  #   branches:
-  #     - main
-  # pull_request:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -21,8 +19,6 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Docker Hub
-      # Only login on push to main (not on PRs) to avoid exposing secrets to forks
-      if: github.event_name == 'push'
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -35,15 +31,14 @@ jobs:
         images: ${{ secrets.DOCKERHUB_USERNAME }}/roampage
         tags: |
           type=raw,value=latest,enable={{is_default_branch}}
-          type=ref,event=branch
-          type=sha
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
 
     - name: Build and push
       uses: docker/build-push-action@v5
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        # Only push on push to main, just build on PRs
-        push: ${{ github.event_name == 'push' }}
+        push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
