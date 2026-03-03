@@ -306,7 +306,7 @@ function setSessionCookie(res, token, req) {
 
 // Strip auth hashes and mask locked pages before sending config to client.
 // - Removes cfg.auth (contains hashes) and adds cfg._auth.globalPinEnabled flag
-// - For each page: removes pg.pin, adds pg.pinEnabled, and if locked → pg.locked/lockType/categories=[]
+// - If a global PIN is set and the session is not unlocked: marks every page locked
 function stripAndMaskConfig(rawConfig, session) {
   if (!rawConfig || typeof rawConfig !== "object") return rawConfig;
   const cfg = JSON.parse(JSON.stringify(rawConfig));
@@ -314,26 +314,13 @@ function stripAndMaskConfig(rawConfig, session) {
   if (hasGlobalPin) cfg._auth = { globalPinEnabled: true };
   delete cfg.auth;
   const globalUnlocked = session && session.unlockedPages === "global";
-  const rawPages = rawConfig.pages || [];
-  for (let i = 0; i < (cfg.pages || []).length; i++) {
-    const pg = cfg.pages[i];
-    const rawPg = rawPages[i];
-    const hasPgPin = !!(rawPg && rawPg.pin && rawPg.pin.hash);
-    if (hasPgPin) pg.pinEnabled = true;
-    delete pg.pin;
-    if (hasPgPin || hasGlobalPin) {
-      const pageUnlocked = session && session.unlockedPages !== "global" &&
-                           session.unlockedPages instanceof Set &&
-                           session.unlockedPages.has(pg.id);
-      if (!globalUnlocked && !pageUnlocked) {
-        let lockType = "pin";
-        if (hasPgPin) lockType = rawPg.pin.type || "pin";
-        else lockType = rawConfig.auth.globalPin.type || "pin";
-        pg.locked = true;
-        pg.lockType = lockType;
-        pg.lockScope = hasPgPin ? pg.id : "global";
-        pg.categories = [];
-      }
+  for (const pg of cfg.pages || []) {
+    delete pg.pin; // strip any legacy per-page pin hashes
+    if (hasGlobalPin && !globalUnlocked) {
+      pg.locked = true;
+      pg.lockType = rawConfig.auth.globalPin.type || "pin";
+      pg.lockScope = "global";
+      pg.categories = [];
     }
   }
   return cfg;
@@ -491,12 +478,9 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
     if (ifMatch !== undefined && ifMatch !== String(configVersion)) {
       return res.status(409).json({ error: "conflict", version: configVersion });
     }
-    // Re-inject sensitive fields from disk so the client (which never sees them) can't wipe them
+    // Re-inject auth from disk (client never sees hashes, so it can't preserve them)
     const existing = readConfig() || {};
     if (existing.auth) body.auth = existing.auth;
-    const pinById = {};
-    for (const pg of existing.pages || []) if (pg.id && pg.pin) pinById[pg.id] = pg.pin;
-    for (const pg of body.pages || []) if (pg.id && pinById[pg.id]) pg.pin = pinById[pg.id];
     // Remove server-added metadata fields that must not persist to disk
     delete body._auth;
     delete body._version;
@@ -505,6 +489,7 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       delete pg.pinEnabled;
       delete pg.lockType;
       delete pg.lockScope;
+      delete pg.pin; // per-page PIN not supported — strip any legacy value
     }
     writeConfig(body);
     configVersion = Date.now();
@@ -1039,37 +1024,20 @@ app.get("/api/weather", weatherRateLimit, async (req, res) => {
 
 // ── API: Auth endpoints ───────────────────────────────────────
 
-// Unlock a page or global scope (rate-limited to 5 attempts/15min/IP)
+// Unlock all pages (rate-limited to 5 attempts/15min/IP)
 app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
-  const { scope, secret } = req.body || {};
-  if (!scope || !secret) return res.status(400).json({ error: "Missing scope or secret" });
+  const { secret } = req.body || {};
+  if (!secret) return res.status(400).json({ error: "Missing secret" });
 
   const rawConfig = readConfig();
   if (!rawConfig) return res.status(500).json({ error: "No config" });
 
   const globalHash = rawConfig.auth?.globalPin?.hash;
-  const pagePins = {};
-  for (const pg of rawConfig.pages || []) {
-    if (pg.id && pg.pin?.hash) pagePins[pg.id] = pg.pin.hash;
+  if (!globalHash || !await verifySecret(String(secret), globalHash)) {
+    return res.status(401).json({ error: "Incorrect secret" });
   }
 
-  let matchedGlobal = false;
-  let matched = false;
-
-  if (scope === "global") {
-    if (globalHash && await verifySecret(String(secret), globalHash)) { matched = true; matchedGlobal = true; }
-  } else {
-    // Try page pin first, then global pin (master key)
-    if (pagePins[scope] && await verifySecret(String(secret), pagePins[scope])) {
-      matched = true;
-    } else if (globalHash && await verifySecret(String(secret), globalHash)) {
-      matched = true; matchedGlobal = true;
-    }
-  }
-
-  if (!matched) return res.status(401).json({ error: "Incorrect secret" });
-
-  // Get or create session
+  // Get or create session and mark as globally unlocked
   let token;
   const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
   if (cookieMatch && sessions.has(cookieMatch[1])) {
@@ -1078,13 +1046,7 @@ app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), asyn
     token = generateToken();
     sessions.set(token, { unlockedPages: new Set() });
   }
-  const sess = sessions.get(token);
-  if (matchedGlobal || scope === "global") {
-    sess.unlockedPages = "global";
-  } else if (sess.unlockedPages !== "global") {
-    if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
-    sess.unlockedPages.add(scope);
-  }
+  sessions.get(token).unlockedPages = "global";
   setSessionCookie(res, token, req);
   res.json({ ok: true });
 });
@@ -1113,55 +1075,35 @@ app.get("/api/auth/session", (req, res) => {
   return res.json({ unlockedPages: [...sess.unlockedPages] });
 });
 
-// Set or remove a PIN/password on a page or globally
-// Also auto-unlocks the scope so the admin stays logged in after setting a PIN
+// Set or remove the global PIN/password
+// Also auto-unlocks after setting so the admin stays logged in
 app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
-  const { scope, secret, type, currentSecret } = req.body || {};
-  if (!scope) return res.status(400).json({ error: "Missing scope" });
+  const { secret, type, currentSecret } = req.body || {};
 
   const rawConfig = readConfig() || {};
   const removing = secret === null || secret === undefined || secret === "";
 
-  if (scope === "global") {
-    if (removing) {
-      const existingHash = rawConfig.auth?.globalPin?.hash;
-      if (!existingHash) return res.status(404).json({ error: "No global PIN set" });
-      if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
-      if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
-      delete rawConfig.auth.globalPin;
-      if (rawConfig.auth && Object.keys(rawConfig.auth).length === 0) delete rawConfig.auth;
-    } else {
-      if (!rawConfig.auth) rawConfig.auth = {};
-      const existingHash = rawConfig.auth.globalPin?.hash;
-      if (existingHash) {
-        if (!currentSecret) return res.status(401).json({ error: "Current secret required to change PIN" });
-        if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
-      }
-      rawConfig.auth.globalPin = { hash: await hashSecret(String(secret)), type: type || "pin" };
-    }
+  if (removing) {
+    const existingHash = rawConfig.auth?.globalPin?.hash;
+    if (!existingHash) return res.status(404).json({ error: "No global PIN set" });
+    if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
+    if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
+    delete rawConfig.auth.globalPin;
+    if (rawConfig.auth && Object.keys(rawConfig.auth).length === 0) delete rawConfig.auth;
   } else {
-    const pg = (rawConfig.pages || []).find(p => p.id === scope);
-    if (!pg) return res.status(404).json({ error: "Page not found" });
-    if (removing) {
-      const existingHash = pg.pin?.hash;
-      if (!existingHash) return res.status(404).json({ error: "No PIN set for this page" });
-      if (!currentSecret) return res.status(401).json({ error: "Current secret required" });
+    if (!rawConfig.auth) rawConfig.auth = {};
+    const existingHash = rawConfig.auth.globalPin?.hash;
+    if (existingHash) {
+      if (!currentSecret) return res.status(401).json({ error: "Current secret required to change PIN" });
       if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
-      delete pg.pin;
-    } else {
-      const existingHash = pg.pin?.hash;
-      if (existingHash) {
-        if (!currentSecret) return res.status(401).json({ error: "Current secret required to change PIN" });
-        if (!await verifySecret(String(currentSecret), existingHash)) return res.status(401).json({ error: "Incorrect secret" });
-      }
-      pg.pin = { hash: await hashSecret(String(secret)), type: type || "pin" };
     }
+    rawConfig.auth.globalPin = { hash: await hashSecret(String(secret)), type: type || "pin" };
   }
 
   writeConfig(rawConfig);
   configVersion = Date.now();
 
-  // Auto-unlock the scope so the admin stays in edit mode and sees "● Active"
+  // Auto-unlock after setting so the admin sees "● Active" without re-entering the PIN
   if (!removing) {
     let token;
     const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
@@ -1171,13 +1113,7 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), as
       token = generateToken();
       sessions.set(token, { unlockedPages: new Set() });
     }
-    const sess = sessions.get(token);
-    if (scope === "global") {
-      sess.unlockedPages = "global";
-    } else if (sess.unlockedPages !== "global") {
-      if (!(sess.unlockedPages instanceof Set)) sess.unlockedPages = new Set();
-      sess.unlockedPages.add(scope);
-    }
+    sessions.get(token).unlockedPages = "global";
     setSessionCookie(res, token, req);
   }
 

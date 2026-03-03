@@ -603,24 +603,19 @@ function renderLockOverlay(pg){
 
 // ── Security editor (shown inside edit mode tail) ────────────
 function renderSecurityEditor(){
-  const p=page();
   const hasGlobal=!!(config._auth&&config._auth.globalPinEnabled);
-  const hasPagePin=!!p.pinEnabled;
   const dot=(on)=>on?`<span style="color:#22c55e;font-size:12px;font-weight:600">● Active</span>`:`<span style="color:#64748b;font-size:12px">○ Not set</span>`;
-  const globalBtns=hasGlobal
+  const pinBtns=hasGlobal
     ?`<button class="btn-small" style="padding:3px 10px" data-action="set-global-pin">Change</button><button class="btn-small" style="padding:3px 10px;color:#ef4444;border-color:rgba(239,68,68,.3)" data-action="remove-global-pin">Remove</button>`
     :`<button class="btn-small" style="padding:3px 10px" data-action="set-global-pin">Set PIN</button>`;
-  const pageBtns=hasPagePin
-    ?`<button class="btn-small" style="padding:3px 10px" data-action="set-page-pin">Change</button><button class="btn-small" style="padding:3px 10px;color:#ef4444;border-color:rgba(239,68,68,.3)" data-action="remove-page-pin">Remove</button>`
-    :`<button class="btn-small" style="padding:3px 10px" data-action="set-page-pin">Set PIN</button>`;
-  const isChangingPin=(pinFormTarget==="global"&&hasGlobal)||(pinFormTarget!==null&&pinFormTarget!=="global"&&hasPagePin);
+  const isChangingPin=pinFormTarget==="global"&&hasGlobal;
   const currentPinField=isChangingPin?`<div style="margin-bottom:8px"><label class="edit-label">Current PIN / password</label><input class="edit-input" type="password" id="pin-form-current" placeholder="Current secret" autocomplete="current-password"></div>`:"";
   const inlineForm=pinFormTarget
-    ?`<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">${isChangingPin?"Change":"Set"} secret — ${pinFormTarget==="global"?"Global PIN":"Page PIN"}</div>${currentPinField}<div style="margin-bottom:8px"><label class="edit-label">Type</label><select class="edit-input" id="pin-form-type" style="width:auto"><option value="pin"${pinFormType==="pin"?" selected":""}>Numeric PIN (6 digits)</option><option value="password"${pinFormType==="password"?" selected":""}>Password</option></select></div><div style="margin-bottom:8px"><label class="edit-label">New secret</label><input class="edit-input" type="password" id="pin-form-input" placeholder="Enter PIN or password" autocomplete="new-password"></div><div style="margin-bottom:8px"><label class="edit-label">Confirm</label><input class="edit-input" type="password" id="pin-form-confirm" placeholder="Confirm" autocomplete="new-password"></div><div id="pin-form-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(139,92,246,.2);border-color:rgba(139,92,246,.4)" data-action="confirm-set-pin">Save</button><button class="btn-small" data-action="cancel-set-pin">Cancel</button></div></div>`
+    ?`<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#a78bfa;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">${isChangingPin?"Change":"Set"} secret</div>${currentPinField}<div style="margin-bottom:8px"><label class="edit-label">Type</label><select class="edit-input" id="pin-form-type" style="width:auto"><option value="pin"${pinFormType==="pin"?" selected":""}>Numeric PIN (6 digits)</option><option value="password"${pinFormType==="password"?" selected":""}>Password</option></select></div><div style="margin-bottom:8px"><label class="edit-label">New secret</label><input class="edit-input" type="password" id="pin-form-input" placeholder="Enter PIN or password" autocomplete="new-password"></div><div style="margin-bottom:8px"><label class="edit-label">Confirm</label><input class="edit-input" type="password" id="pin-form-confirm" placeholder="Confirm" autocomplete="new-password"></div><div id="pin-form-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(139,92,246,.2);border-color:rgba(139,92,246,.4)" data-action="confirm-set-pin">Save</button><button class="btn-small" data-action="cancel-set-pin">Cancel</button></div></div>`
     :pinRemoveTarget
-    ?`<div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Confirm removal — ${pinRemoveTarget==="global"?"Global PIN":"Page PIN"}</div><div style="margin-bottom:8px"><label class="edit-label">Current PIN / password</label><input class="edit-input" type="password" id="pin-remove-input" placeholder="Enter current secret" autocomplete="current-password"></div><div id="pin-remove-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fca5a5" data-action="confirm-remove-pin">Remove</button><button class="btn-small" data-action="cancel-remove-pin">Cancel</button></div></div>`
+    ?`<div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Confirm removal</div><div style="margin-bottom:8px"><label class="edit-label">Current PIN / password</label><input class="edit-input" type="password" id="pin-remove-input" placeholder="Enter current secret" autocomplete="current-password"></div><div id="pin-remove-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fca5a5" data-action="confirm-remove-pin">Remove</button><button class="btn-small" data-action="cancel-remove-pin">Cancel</button></div></div>`
     :"";
-  return`<div class="edit-section"><label class="edit-label">Security</label><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">Global PIN (all pages)</span>${dot(hasGlobal)}${globalBtns}</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">Page PIN (this page only)</span>${dot(hasPagePin)}${pageBtns}</div>${inlineForm}</div>`;
+  return`<div class="edit-section"><label class="edit-label">Security</label><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">PIN / Password (all pages)</span>${dot(hasGlobal)}${pinBtns}</div>${inlineForm}</div>`;
 }
 
 function renderBackupModal(){
@@ -923,9 +918,8 @@ function render(){
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
   const colPick=editMode&&!mobile?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n} column${n>1?"s":""}</button>`).join("")}</div>`:"";
-  const isProtected=p.pinEnabled||(config._auth&&config._auth.globalPinEnabled);
-  const lockScope=(config._auth&&config._auth.globalPinEnabled)?"global":p.id;
-  const lockBtnHtml=editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="${h(lockScope)}" title="Lock page">🔒</button>`:"";
+  const isProtected=!!(config._auth&&config._auth.globalPinEnabled);
+  const lockBtnHtml=editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="global" title="Lock page">🔒</button>`:"";
   const headerInner=editMode
     ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
@@ -1091,14 +1085,12 @@ document.addEventListener("click",e=>{
     case"toggle-edit":{if(!editMode&&page().locked)break;editMode=!editMode;openSvcBodies.clear();if(!editMode){integCurrentPage=-1;pinFormTarget=null;pinRemoveTarget=null;}render();if(!editMode)startHealthLoop();break;}
     // Lock / unlock (PIN auth)
     case"lock-scope":{const scope=btn.dataset.scope;fetch("/api/auth/lock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope})}).then(async()=>{lockPinDigits="";lockError="";await refreshConfig();startHealthLoop();});break;}
-    case"pin-digit":{if(lockPinDigits.length<6){lockPinDigits+=btn.dataset.digit;document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));if(lockPinDigits.length===6){render();submitUnlock(page().lockScope||page().id,lockPinDigits);}}break;}
+    case"pin-digit":{if(lockPinDigits.length<6){lockPinDigits+=btn.dataset.digit;document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));if(lockPinDigits.length===6){render();submitUnlock(page().lockScope||"global",lockPinDigits);}}break;}
     case"pin-backspace":{if(lockPinDigits.length>0){lockPinDigits=lockPinDigits.slice(0,-1);document.querySelectorAll('.lock-dot').forEach((d,i)=>d.classList.toggle('filled',i<lockPinDigits.length));}break;}
-    case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().lockScope||page().id,inp.value);break;}
+    case"password-submit":{const inp=document.getElementById("lock-password-input");if(inp&&inp.value.trim())submitUnlock(page().lockScope||"global",inp.value);break;}
     // Security editor (setpin)
     case"set-global-pin":pinRemoveTarget=null;pinFormTarget="global";pinFormType="pin";render();break;
-    case"set-page-pin":pinRemoveTarget=null;pinFormTarget=page().id;pinFormType="pin";render();break;
     case"remove-global-pin":pinFormTarget=null;pinRemoveTarget="global";render();break;
-    case"remove-page-pin":pinFormTarget=null;pinRemoveTarget=page().id;render();break;
     case"confirm-remove-pin":{const sc=pinRemoveTarget;if(!sc)break;const inputEl=document.getElementById("pin-remove-input");if(!inputEl)break;const currentSecret=inputEl.value.trim();if(!currentSecret){const errEl=document.getElementById("pin-remove-error");if(errEl){errEl.textContent="Enter your current PIN.";errEl.style.display="";}break;}pinRemoveTarget=null;render();(async()=>{try{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret:null,currentSecret})});if(res.ok){await refreshConfig();}else{const data=await res.json().catch(()=>({}));pinRemoveTarget=sc;render();const e2=document.getElementById("pin-remove-error");if(e2){e2.textContent=data.error==="Incorrect secret"?"Incorrect PIN.":data.error||"Error.";e2.style.display="";}}}catch{pinRemoveTarget=sc;render();}})();break;}
     case"cancel-remove-pin":pinRemoveTarget=null;render();break;
     case"confirm-set-pin":{const typeEl=document.getElementById("pin-form-type");const inputEl=document.getElementById("pin-form-input");const confirmEl=document.getElementById("pin-form-confirm");const currentEl=document.getElementById("pin-form-current");const errEl=document.getElementById("pin-form-error");if(!typeEl||!inputEl||!confirmEl)break;const ptype=typeEl.value;const secret=inputEl.value;const conf=confirmEl.value;const currentSecret=currentEl?currentEl.value:undefined;const showErr=(msg)=>{if(errEl){errEl.textContent=msg;errEl.style.display="";}};if(currentEl&&!currentSecret){showErr("Enter your current PIN first.");break;}if(!secret){showErr("Secret cannot be empty.");break;}if(secret!==conf){showErr("Secrets do not match.");break;}if(ptype==="pin"&&!/^\d{6}$/.test(secret)){showErr("PIN must be exactly 6 digits.");break;}const sc=pinFormTarget;pinFormTarget=null;(async()=>{const res=await fetch("/api/auth/setpin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope:sc,secret,type:ptype,currentSecret})});if(res.ok){await refreshConfig();}else{const data=await res.json().catch(()=>({}));pinFormTarget=sc;render();const e2=document.getElementById("pin-form-error");if(e2){e2.textContent=data.error||"Error.";e2.style.display="";}}})();break;}
@@ -1327,7 +1319,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Enter" && e.target.id === "lock-password-input") {
     e.preventDefault();
     const inp = e.target;
-    if (inp.value.trim()) submitUnlock(page().lockScope||page().id, inp.value);
+    if (inp.value.trim()) submitUnlock(page().lockScope||"global", inp.value);
   }
   // Enter on PIN remove confirmation input → submit
   if (e.key === "Enter" && e.target.id === "pin-remove-input") {
