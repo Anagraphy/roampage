@@ -11,3 +11,6 @@ data/
 
 # Node
 node_modules/
+
+# Local Gitea instance data (not part of the project)
+roampage/
