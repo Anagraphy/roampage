@@ -851,7 +851,7 @@ function renderEditCategory(cat,ci,total,colCtx=null){
 // MAIN RENDER
 // ═══════════════════════════════════════════════════════════════
 function render(){
-  const app=$("#app");const p=page();const mobile=isMobile();const colCount=p.columns||1;const ec=(mobile&&!editMode)?1:colCount;const cs=(n)=>n===colCount?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc':'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
+  const app=$("#app");const p=page();const mobile=isMobile();const colCount=p.columns||(mobile?1:2);const ec=mobile?1:colCount;const cs=(n)=>n===colCount?'background:rgba(99,102,241,.18);border-color:rgba(99,102,241,.5);color:#a5b4fc':'background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:#94a3b8';
   const wasSearchFocused = document.activeElement && document.activeElement.classList.contains("search-input");
   let searchSelectionStart = -1, searchSelectionEnd = -1;
   if (wasSearchFocused) {
@@ -893,7 +893,7 @@ function render(){
     body=renderLockOverlay(p);
   } else if(editMode){
     const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
-    if(colCount>=2){
+    if(colCount>=2&&!mobile){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
       const renderCol=(items,isLeft)=>items.map(({c,i},colPos)=>renderEditCategory(c,i,p.categories.length,{colPos,colTotal:items.length,isLeft})).join("");
@@ -917,7 +917,7 @@ function render(){
   }
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
-  const colPick=editMode?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n} col</button>`).join("")}</div>`:"";
+  const colPick=(editMode&&!mobile)?`<div style="display:flex;gap:3px">${[1,2].map(n=>`<button class="col-pick" style="${cs(n)}" data-action="set-cols" data-cols="${n}">${n} col</button>`).join("")}</div>`:"";
 
   const isProtected=!!(config._auth&&config._auth.globalPinEnabled);
   const lockBtnHtml=editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="global" title="Lock page">🔒</button>`:"";
