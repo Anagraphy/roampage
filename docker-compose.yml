@@ -6,7 +6,7 @@ services:
     ports:
       - "3046:3000"
     # environment:
-    #   ENCRYPTION_KEY: "none"  # or a 64-char hex key — see README
+    #   ENCRYPTION_KEY: none  # or a 64-char hex key — see README
     volumes:
       - ./data:/data
     mem_limit: 256m
