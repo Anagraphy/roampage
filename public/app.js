@@ -1315,6 +1315,17 @@ document.addEventListener("keydown", e => {
     const si = $(".search-input");
     if (si) si.focus();
   }
+  // Keyboard input for numeric PIN overlay (digits + backspace)
+  if (page().locked && page().lockType === "pin" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+    if (/^\d$/.test(e.key) && lockPinDigits.length < 6) {
+      lockPinDigits += e.key;
+      document.querySelectorAll(".lock-dot").forEach((d, i) => d.classList.toggle("filled", i < lockPinDigits.length));
+      if (lockPinDigits.length === 6) { render(); submitUnlock(page().lockScope||"global", lockPinDigits); }
+    } else if (e.key === "Backspace" && lockPinDigits.length > 0) {
+      lockPinDigits = lockPinDigits.slice(0, -1);
+      document.querySelectorAll(".lock-dot").forEach((d, i) => d.classList.toggle("filled", i < lockPinDigits.length));
+    }
+  }
   // Enter on password lock input → submit
   if (e.key === "Enter" && e.target.id === "lock-password-input") {
     e.preventDefault();
