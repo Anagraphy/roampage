@@ -617,7 +617,7 @@ function renderSecurityEditor(){
     :pinRemoveTarget
     ?`<div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;margin-top:10px"><div style="font-size:11px;color:#f87171;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Confirm removal</div><div style="margin-bottom:8px"><label class="edit-label">Current PIN / password</label><input class="edit-input" type="password" id="pin-remove-input" placeholder="Enter current secret" autocomplete="current-password"></div><div id="pin-remove-error" style="color:#ef4444;font-size:11px;margin-bottom:6px;display:none"></div><div style="display:flex;gap:6px"><button class="btn-small" style="background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.4);color:#fca5a5" data-action="confirm-remove-pin">Remove</button><button class="btn-small" data-action="cancel-remove-pin">Cancel</button></div></div>`
     :"";
-  return`<div class="edit-section"><label class="edit-label">Security</label><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">PIN / Password (all pages)</span>${dot(hasGlobal)}${pinBtns}</div>${inlineForm}</div>`;
+  return`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:#94a3b8;min-width:160px">PIN / Password (all pages)</span>${dot(hasGlobal)}${pinBtns}</div>${inlineForm}`;
 }
 
 function renderBackupModal(){
@@ -918,7 +918,11 @@ function render(){
     editMode=false;
     body=renderLockOverlay(p);
   } else if(editMode){
-    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderCssEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    const divider=`<div style="margin:24px 0 18px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div><span style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap">Options de la page</span><div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div></div>`;
+    const appearanceGroup=`<div style="border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;background:rgba(255,255,255,.02);margin-bottom:12px"><div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Apparence</div>${renderWallpaperEditor()}${renderTextColorEditor()}${renderCssEditor()}${renderLogoEditor()}</div>`;
+    const actionBtns=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    const securitySection=`<div style="margin-top:20px;border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px;background:rgba(239,68,68,.03)"><div style="font-size:10px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">🔒 Sécurité</div>${renderSecurityEditor()}</div>`;
+    const tail=`${divider}${renderGlobalTagsEditor()}${appearanceGroup}${actionBtns}${securitySection}`;
     if(colCount>=2&&!mobile){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
