@@ -45,6 +45,8 @@ let pinRemoveTarget=null; // null | "global" | pageId — drives the inline remo
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
 let widgetPickerCat=-1; // -1 = hidden, >=0 = category index
 let bmIconTarget=null; // {ci, si, li} for bookmark icon browser
+let globalCssOpen=false;
+let pageCssOpen=false;
 // Health: keyed by URL for per-server granularity
 let healthByUrl={};
 let healthInterval=null;
@@ -96,7 +98,7 @@ function pageSlug(pg){return pg.slug||slugify(pg.title);}
 function findPageBySlug(slug){if(!slug||slug==="/")return 0;slug=slug.replace(/^\//,"");const i=config.pages.findIndex(p=>pageSlug(p)===slug);return i>=0?i:0;}
 function pushPageUrl(){const slug=pageSlug(page());history.replaceState(null,"","/"+slug);}
 function shellScrollTop(){const sh=document.getElementById("shell");if(sh)sh.scrollTop=0;}
-window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(location.pathname);render();shellScrollTop();startHealthLoop();});
+window.addEventListener("popstate",()=>{config.currentPage=findPageBySlug(location.pathname);pageCssOpen=!!(page().customCss);render();shellScrollTop();startHealthLoop();});
 function getTagColor(t){const p=page();return p.tags&&p.tags[t]?p.tags[t]:"#6b7280";}
 function tagTextColor(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return(0.299*r+0.587*g+0.114*b)/255>0.5?"#000":"#fff";}
 function getAllTags(){const p=page();return p.tags?Object.keys(p.tags):[];}
@@ -155,6 +157,8 @@ async function loadConfig(){
       delete healthCache[url]; // prune stale entries at startup
     }
   }
+  globalCssOpen=!!(config.customCss);
+  pageCssOpen=!!(page().customCss);
   render();startHealthLoop();pushPageUrl();
 }
 // Re-fetch config from server and re-render (keeps current page / edit mode)
@@ -660,11 +664,38 @@ function renderWallpaperEditor(){
   return`<div class="edit-section"><label class="edit-label">Wallpaper</label>${preview}<div style="display:flex;gap:6px;margin-top:6px;align-items:center"><label class="wp-upload-btn">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-wallpaper" data-wp="desktop"></label>${del}<span style="font-size:10px;color:#64748b">Auto-compressed for fast loading</span></div></div>`;
 }
 
+function renderGlobalCssEditor(){
+  const css=config.customCss||"";
+  return`<div class="edit-section"><label class="edit-label">CSS global</label><div style="display:flex;align-items:center;gap:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#94a3b8"><input type="checkbox" data-action="toggle-global-css" ${globalCssOpen?"checked":""} style="accent-color:#8b5cf6">Activer le CSS global (toutes les pages)</label></div>${globalCssOpen?`<textarea class="css-editor" data-action="set-global-css" placeholder="/* CSS appliqué sur toutes les pages */" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
+}
+
+function renderPageCssEditor(){
+  const css=page().customCss||"";
+  return`<div class="edit-section"><label class="edit-label">CSS de la page</label><div style="display:flex;align-items:center;gap:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#94a3b8"><input type="checkbox" data-action="toggle-page-css" ${pageCssOpen?"checked":""} style="accent-color:#8b5cf6">Activer le CSS pour cette page uniquement</label></div>${pageCssOpen?`<textarea class="css-editor" data-action="set-page-css" placeholder="/* CSS appliqué sur cette page uniquement */" spellcheck="false">${h(css)}</textarea>`:""}</div>`;
+}
+
 function applyTextColor(){
   let tag=document.getElementById("roampage-text-color");
   if(!page().textColor){if(tag)tag.remove();return;}
   if(!tag){tag=document.createElement("style");tag.id="roampage-text-color";document.head.appendChild(tag);}
   tag.textContent=`.cat-title,.svc-desc{color:${page().textColor}!important}`;
+}
+
+function applyCustomCss(){
+  let gTag=document.getElementById("roampage-css-global");
+  const gCss=(config.customCss||"").trim();
+  if(!gCss){if(gTag)gTag.remove();}
+  else{
+    if(!gTag){gTag=document.createElement("style");gTag.id="roampage-css-global";document.head.appendChild(gTag);}
+    gTag.textContent=gCss;
+  }
+  let pTag=document.getElementById("roampage-css-page");
+  const pCss=(page().customCss||"").trim();
+  if(!pCss){if(pTag)pTag.remove();}
+  else{
+    if(!pTag){pTag=document.createElement("style");pTag.id="roampage-css-page";document.head.appendChild(pTag);}
+    pTag.textContent=pCss;
+  }
 }
 
 function applyWallpaper(){
@@ -892,7 +923,7 @@ function render(){
     editMode=false;
     body=renderLockOverlay(p);
   } else if(editMode){
-    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderLogoEditor()}${renderWallpaperEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
+    const tail=`${renderSecurityEditor()}${renderGlobalTagsEditor()}${renderTextColorEditor()}${renderPageCssEditor()}${renderLogoEditor()}${renderWallpaperEditor()}${renderGlobalCssEditor()}<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn-small" data-action="json-pick-export">⬆ Export JSON</button><button class="btn-small" data-action="json-pick-import">⬇ Import JSON</button><button class="btn-small" style="background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3);color:#22c55e" data-action="open-backups">📦 Backups</button></div>`;
     if(colCount>=2&&!mobile){
       const leftItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>(c.column||1)===1);
       const rightItems=p.categories.map((c,i)=>({c,i})).filter(({c})=>c.column===2);
@@ -928,6 +959,7 @@ function render(){
   document.title=p.title||"Roampage";
   applyWallpaper();
   applyTextColor();
+  applyCustomCss();
   startClocks();
   if(editMode)setTimeout(initPellEditors,0);
   else{setTimeout(initHomeTextWidgets,0);if(integCurrentPage!==config.currentPage)startIntegrations();else repaintIntegrations();}
@@ -1100,7 +1132,7 @@ document.addEventListener("click",e=>{
     case"toggle-cols":{p.columns=(p.columns||2)===1?2:1;saveConfig();render();break;}
 
     // Pages
-    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;pinFormTarget=null;pinRemoveTarget=null;lockPinDigits="";lockError="";saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
+    case"switch-page":config.currentPage=pi;editMode=false;openSvcBodies.clear();integCurrentPage=-1;pinFormTarget=null;pinRemoveTarget=null;lockPinDigits="";lockError="";pageCssOpen=!!(page().customCss);saveConfig();render();shellScrollTop();startHealthLoop();pushPageUrl();break;
     case"add-page":config.pages.push(EMPTY_PAGE());config.currentPage=config.pages.length-1;editMode=true;openSvcBodies.clear();saveConfig();render();break;
     case"del-page":if(config.pages.length>1){config.pages.splice(pi,1);if(config.currentPage>=config.pages.length)config.currentPage=config.pages.length-1;saveConfig();render();}break;
 
@@ -1239,6 +1271,10 @@ document.addEventListener("click",e=>{
     // Text color
     case"reset-text-color":page().textColor="";applyTextColor();saveConfig();render();break;
 
+    // Custom CSS
+    case"toggle-global-css":globalCssOpen=!globalCssOpen;if(!globalCssOpen){config.customCss="";applyCustomCss();saveConfig();}render();break;
+    case"toggle-page-css":pageCssOpen=!pageCssOpen;if(!pageCssOpen){page().customCss="";applyCustomCss();saveConfig();}render();break;
+
     // Logo
     case"del-logo":{if(config.logoUrl){const fname=config.logoUrl.split("/").pop().split("?")[0];fetch("/api/wallpaper/"+encodeURIComponent(fname),{method:"DELETE"}).catch(()=>{});}config.logoUrl="";saveConfig();render();break;}
     case"toggle-logo-hidden":config.logoHidden=!config.logoHidden;saveConfig();render();break;
@@ -1268,6 +1304,8 @@ document.addEventListener("input",e=>{
     case"edit-srv-label":p.categories[ci].services[si].servers[sri].label=el.value;saveConfig();break;
     case"edit-srv-url":p.categories[ci].services[si].servers[sri].url=el.value;saveConfig();break;
     case"set-text-color":page().textColor=el.value;applyTextColor();saveConfig();break;
+    case"set-global-css":config.customCss=el.value;applyCustomCss();saveConfig();break;
+    case"set-page-css":page().customCss=el.value;applyCustomCss();saveConfig();break;
     case"icon-search":iconBrowserSearch=el.value;renderIconBrowserContent();break;
     case"rename-tag":{const old=el.dataset.old,nw=el.value.trim().toUpperCase();if(nw&&nw!==old&&!p.tags[nw]){p.tags[nw]=p.tags[old];delete p.tags[old];for(const cat of p.categories)for(const svc of cat.services)svc.tags=(svc.tags||[]).map(t=>t===old?nw:t);el.dataset.old=nw;saveConfig();}break;}
     // Weather city search input
