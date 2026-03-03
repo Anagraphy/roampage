@@ -130,11 +130,22 @@ volumes:
   - ./data:/data
 ```
 
+> **Warning:** With a bind mount, make sure the `volumes:` section is always present in your `docker-compose.yml`. If it is missing, data is written inside the container and will be lost on the next `docker compose down`.
+
+## Updating
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Your data is never affected by updates as long as the volume is correctly mounted.
+
 ## Data
 - **Config** is stored at `/data/config.json`
+- **Backups** are stored at `/data/backups/`
 - **Wallpapers** are stored at `/data/wallpapers/`
 
-Both are persisted via the Docker volume.
+All data is persisted via the Docker volume and is never touched by image updates.
 
 ## Security
 

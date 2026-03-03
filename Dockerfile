@@ -20,6 +20,8 @@ RUN curl -sL "https://unpkg.com/pell@1.0.6/dist/pell.min.js"                    
 
 RUN mkdir -p /data && chown -R node:node /app /data && chmod +x /entrypoint.sh
 
+VOLUME /data
+
 ENV PORT=3000
 ENV CONFIG_PATH=/data/config.json
 
