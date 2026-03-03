@@ -62,6 +62,20 @@ const uploadRateLimit = makeRateLimiter(60 * 1000, 60);      //  60 uploads/min 
 const weatherRateLimit = makeRateLimiter(60 * 1000, 30);     //  30 req/min per IP
 const iconsRateLimit = makeRateLimiter(60 * 1000, 60);       //  60 req/min per IP
 const authRateLimit = makeRateLimiter(15 * 60 * 1000, 5);   //   5 unlock attempts per 15min per IP
+// Global cap: 20 unlock attempts per 15 min across ALL IPs (prevents distributed brute force)
+const _globalAuthWindow = { count: 0, resetAt: 0 };
+function globalAuthRateLimit(req, res, next) {
+  const now = Date.now();
+  if (now > _globalAuthWindow.resetAt) {
+    _globalAuthWindow.count = 0;
+    _globalAuthWindow.resetAt = now + 15 * 60 * 1000;
+  }
+  if (++_globalAuthWindow.count > 20) {
+    res.setHeader("Retry-After", Math.ceil((_globalAuthWindow.resetAt - now) / 1000));
+    return res.status(429).json({ error: "Too many requests" });
+  }
+  next();
+}
 
 // ── SSRF protection ───────────────────────────────────────────
 const BLOCKED_HOSTS = new Set([
@@ -1025,7 +1039,7 @@ app.get("/api/weather", weatherRateLimit, async (req, res) => {
 // ── API: Auth endpoints ───────────────────────────────────────
 
 // Unlock all pages (rate-limited to 5 attempts/15min/IP)
-app.post("/api/auth/unlock", authRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
+app.post("/api/auth/unlock", authRateLimit, globalAuthRateLimit, express.json({ limit: "1kb" }), async (req, res) => {
   const { secret } = req.body || {};
   if (!secret) return res.status(400).json({ error: "Missing secret" });
 
@@ -1103,17 +1117,13 @@ app.post("/api/auth/setpin", configRateLimit, express.json({ limit: "1kb" }), as
   writeConfig(rawConfig);
   configVersion = Date.now();
 
-  // Auto-unlock after setting so the admin sees "● Active" without re-entering the PIN
+  // Invalidate all existing sessions — forces re-auth on every connected client
+  sessions.clear();
+
+  // Auto-unlock for the admin after setting (not removing) so they see "● Active"
   if (!removing) {
-    let token;
-    const cookieMatch = (req.headers.cookie || "").match(/rp_session=([a-f0-9]{64})/);
-    if (cookieMatch && sessions.has(cookieMatch[1])) {
-      token = cookieMatch[1];
-    } else {
-      token = generateToken();
-      sessions.set(token, { unlockedPages: new Set() });
-    }
-    sessions.get(token).unlockedPages = "global";
+    const token = generateToken();
+    sessions.set(token, { unlockedPages: "global" });
     setSessionCookie(res, token, req);
   }
 
