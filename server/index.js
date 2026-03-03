@@ -482,6 +482,15 @@ app.get("/api/config", configRateLimit, (req, res) => {
 // ── API: Save config ─────────────────────────────────────────
 app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req, res) => {
   try {
+    // If a global PIN is set, writing the config requires an active unlocked session
+    const existing = readConfig() || {};
+    if (existing.auth?.globalPin?.hash) {
+      const session = getSession(req);
+      if (!session || session.unlockedPages !== "global") {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+    }
+
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body))
       return res.status(400).json({ error: "Invalid config: must be an object" });
@@ -493,7 +502,6 @@ app.post("/api/config", configRateLimit, express.json({ limit: "500kb" }), (req,
       return res.status(409).json({ error: "conflict", version: configVersion });
     }
     // Re-inject auth from disk (client never sees hashes, so it can't preserve them)
-    const existing = readConfig() || {};
     if (existing.auth) body.auth = existing.auth;
     // Remove server-added metadata fields that must not persist to disk
     delete body._auth;
