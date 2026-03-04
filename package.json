@@ -1,6 +1,6 @@
 {
   "name": "roampage",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Self-hosted roampage dashboard with inline configuration",
   "main": "server/index.js",
   "scripts": {
