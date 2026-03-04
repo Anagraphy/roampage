@@ -682,14 +682,14 @@ function applyCustomCss(){
   if(!gCss){if(gTag)gTag.remove();}
   else{
     if(!gTag){gTag=document.createElement("style");gTag.id="roampage-css-global";document.head.appendChild(gTag);}
-    gTag.textContent=gCss;
+    gTag.textContent=`@layer user{${gCss}}`;
   }
   let pTag=document.getElementById("roampage-css-page");
   const pCss=(page().customCss||"").trim();
   if(!pCss){if(pTag)pTag.remove();}
   else{
     if(!pTag){pTag=document.createElement("style");pTag.id="roampage-css-page";document.head.appendChild(pTag);}
-    pTag.textContent=pCss;
+    pTag.textContent=`@layer user{${pCss}}`;
   }
 }
 
@@ -955,6 +955,7 @@ function render(){
     ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
   app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div>${lockBtnHtml}<button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
+  document.getElementById("shell")?.classList.toggle("edit-mode-active",editMode);
   document.title=p.title||"Roampage";
   applyWallpaper();
   applyTextColor();
