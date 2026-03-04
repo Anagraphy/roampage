@@ -1,6 +1,8 @@
 # <img src="public/favicon.png" width="32" height="32" style="vertical-align:middle"> Roampage
 A self-hosted, responsive dashboard for your services. Fully configurable from the browser — no code editing needed.
 
+**[→ Try the live demo](https://anagraphy.github.io/roampage/)**
+
 ## Features
 
 ### Dashboard
