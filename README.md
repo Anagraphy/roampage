@@ -28,7 +28,7 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 ![Dashboard overview](assets/Screenshot1.png)<br>
 *Main dashboard — organize your self-hosted services by category, with live health checks and custom tags.*
 
-![Configuration panel](assets/Screenshot2.png)<br>
+![Layout options](assets/better%20layout%20options.png)<br>
 *Inline configuration — add, edit and reorder services directly from the browser, no config file editing needed.*
 
 ![Multi-server picker](assets/Screenshot3.png)<br>
