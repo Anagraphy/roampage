@@ -385,7 +385,7 @@ window.fetch = function demoFetch(input, init) {
 
 // ── 5. Action interceptor (capture phase) ─────────────────────────────────
 
-var BLOCKED_ACTIONS = { 'add-page': 1, 'json-pick-export': 1, 'json-pick-import': 1, 'open-backups': 1 };
+var BLOCKED_ACTIONS = { 'add-page': 1, 'json-pick-export': 1, 'json-pick-import': 1, 'open-backups': 1, 'set-global-pin': 1, 'remove-global-pin': 1 };
 
 function showDemoToast() {
   var existing = document.getElementById('demo-toast');
