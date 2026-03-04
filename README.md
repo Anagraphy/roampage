@@ -21,6 +21,7 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 - **No build step** — Pure HTML/CSS/JS frontend, Node.js backend
 
 - **Widgets** — Clock, Weather, Bookmarks, Text, Image, Iframe, Countdown, Separator, System monitor
+- **Custom CSS** — Write any valid CSS per page, applied instantly to retheme the dashboard
 
 ## Screenshots
 
