@@ -25,13 +25,13 @@ const DEFAULT_DEMO_CONFIG = {
       columns: 2,
       categories: [
         {
-          title: 'Médias',
+          title: 'Media',
           services: [
             {
               id: 'svc-jellyfin',
               name: 'Jellyfin',
               url: 'http://jellyfin.local:8096',
-              desc: 'Serveur multimédia',
+              desc: 'Media server',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jellyfin.png',
               servers: [{ label: 'Web', url: 'http://jellyfin.local:8096' }]
             },
@@ -52,17 +52,17 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-grafana',
               name: 'Grafana',
               url: 'http://grafana.local:3000',
-              desc: 'Dashboards & métriques',
+              desc: 'Dashboards & metrics',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/grafana.png',
               servers: [{ label: 'Web', url: 'http://grafana.local:3000' }]
             },
             {
-              id: 'svc-portainer',
-              name: 'Portainer',
-              url: 'http://portainer.local:9000',
-              desc: 'Gestion des containers Docker',
-              icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/portainer.png',
-              servers: [{ label: 'Web', url: 'http://portainer.local:9000' }]
+              id: 'svc-uptime',
+              name: 'Uptime Kuma',
+              url: 'http://uptime.local:3001',
+              desc: 'Uptime monitoring',
+              icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/uptime-kuma.png',
+              servers: [{ label: 'Web', url: 'http://uptime.local:3001' }]
             }
           ]
         },
@@ -73,28 +73,36 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-proxmox',
               name: 'Proxmox',
               url: 'https://proxmox.local:8006',
-              desc: 'Hyperviseur',
+              desc: 'Hypervisor',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/proxmox.png',
               servers: [{ label: 'UI', url: 'https://proxmox.local:8006' }]
+            },
+            {
+              id: 'svc-portainer',
+              name: 'Portainer',
+              url: 'http://portainer.local:9000',
+              desc: 'Docker container management',
+              icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/portainer.png',
+              servers: [{ label: 'Web', url: 'http://portainer.local:9000' }]
             },
             {
               id: 'svc-pihole',
               name: 'Pi-hole',
               url: 'http://pihole.local/admin',
-              desc: 'Blocage de publicités DNS',
+              desc: 'DNS ad blocker',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/pi-hole.png',
               servers: [{ label: 'Admin', url: 'http://pihole.local/admin' }]
             }
           ]
         },
         {
-          title: 'Stockage',
+          title: 'Storage',
           services: [
             {
               id: 'svc-nextcloud',
               name: 'Nextcloud',
               url: 'https://nextcloud.local',
-              desc: 'Cloud personnel',
+              desc: 'Personal cloud storage',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/nextcloud.png',
               servers: [{ label: 'Web', url: 'https://nextcloud.local' }]
             },
@@ -102,28 +110,20 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-syncthing',
               name: 'Syncthing',
               url: 'http://syncthing.local:8384',
-              desc: 'Synchronisation de fichiers',
+              desc: 'File synchronization',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/syncthing.png',
               servers: [{ label: 'Web', url: 'http://syncthing.local:8384' }]
             }
           ]
-        }
-      ]
-    },
-    {
-      id: 'page-demo-dev',
-      title: 'Dev & Tools',
-      slug: 'dev-tools',
-      columns: 2,
-      categories: [
+        },
         {
-          title: 'Développement',
+          title: 'Development',
           services: [
             {
               id: 'svc-gitea',
               name: 'Gitea',
               url: 'http://gitea.local:3000',
-              desc: 'Forge Git auto-hébergée',
+              desc: 'Self-hosted Git forge',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gitea.png',
               servers: [{ label: 'Web', url: 'http://gitea.local:3000' }]
             },
@@ -131,28 +131,20 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-code-server',
               name: 'Code Server',
               url: 'http://code.local:8080',
-              desc: 'VS Code dans le navigateur',
+              desc: 'VS Code in the browser',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vscode.png',
               servers: [{ label: 'IDE', url: 'http://code.local:8080' }]
             }
           ]
         },
         {
-          title: 'Outils',
+          title: 'Security',
           services: [
-            {
-              id: 'svc-uptime',
-              name: 'Uptime Kuma',
-              url: 'http://uptime.local:3001',
-              desc: 'Monitoring de disponibilité',
-              icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/uptime-kuma.png',
-              servers: [{ label: 'Web', url: 'http://uptime.local:3001' }]
-            },
             {
               id: 'svc-vaultwarden',
               name: 'Vaultwarden',
               url: 'https://vault.local',
-              desc: 'Gestionnaire de mots de passe',
+              desc: 'Password manager',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vaultwarden.png',
               servers: [{ label: 'Web', url: 'https://vault.local' }]
             }
@@ -356,7 +348,7 @@ function showDemoToast() {
     'z-index:99999', 'box-shadow:0 4px 20px rgba(0,0,0,.5)',
     'font-family:"DM Sans",sans-serif', 'white-space:nowrap', 'pointer-events:none'
   ].join(';');
-  toast.textContent = 'Cette fonctionnalité n\u2019est pas disponible en mode démo.';
+  toast.textContent = 'This feature is not available in demo mode.';
   document.body.appendChild(toast);
   setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3500);
 }
@@ -424,9 +416,9 @@ document.addEventListener('DOMContentLoaded', function() {
     'font-weight:600', 'color:#c4b5fd', 'backdrop-filter:blur(4px)'
   ].join(';');
 
-  banner.innerHTML = '<span>Mode D\u00e9mo \u2014 Les donn\u00e9es sont r\u00e9initialis\u00e9es \u00e0 la fermeture de l\u2019onglet.</span>' +
+  banner.innerHTML = '<span>Demo Mode \u2014 Data is reset when you close the tab.</span>' +
     '<a href="https://github.com/Anagraphy/roampage" style="color:#a78bfa;text-decoration:underline" target="_blank" rel="noopener">GitHub</a>' +
-    '<button id="demo-banner-close" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;margin-left:4px" title="Fermer">\u00d7</button>';
+    '<button id="demo-banner-close" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;line-height:1;padding:0 4px;margin-left:4px" title="Close">\u00d7</button>';
 
   document.body.insertBefore(banner, document.body.firstChild);
 
