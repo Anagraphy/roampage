@@ -36,6 +36,9 @@ A self-hosted, responsive dashboard for your services. Fully configurable from t
 ![Backup manager](assets/Screenshot4.png)<br>
 *Backup manager — manual backups on demand and automatic weekly backups, restorable with a single click.*
 
+![Custom CSS](assets/custom%20css.png)<br>
+*Custom CSS per page — write any valid CSS and it is applied instantly to retheme the dashboard.*
+
 ## Installation
 
 > **Note:** This project was built with AI assistance (vibe-coded). It works well for personal homelab use, but review the code with your own judgment before deploying in sensitive environments.
