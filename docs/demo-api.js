@@ -32,7 +32,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-jellyfin',
               name: 'Jellyfin',
               url: 'http://jellyfin.local:8096',
-              desc: 'Media server',
+              description: 'Media server',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/jellyfin.png',
               servers: [{ label: 'Web', url: 'http://jellyfin.local:8096' }]
             },
@@ -40,7 +40,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-plex',
               name: 'Plex',
               url: 'http://plex.local:32400',
-              desc: 'Media streaming',
+              description: 'Media streaming',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/plex.png',
               servers: [{ label: 'Web', url: 'http://plex.local:32400' }]
             }
@@ -53,7 +53,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-grafana',
               name: 'Grafana',
               url: 'http://grafana.local:3000',
-              desc: 'Dashboards & metrics',
+              description: 'Dashboards & metrics',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/grafana.png',
               servers: [{ label: 'Web', url: 'http://grafana.local:3000' }]
             },
@@ -61,7 +61,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-uptime',
               name: 'Uptime Kuma',
               url: 'http://uptime.local:3001',
-              desc: 'Uptime monitoring',
+              description: 'Uptime monitoring',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/uptime-kuma.png',
               servers: [{ label: 'Web', url: 'http://uptime.local:3001' }]
             }
@@ -74,7 +74,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-proxmox',
               name: 'Proxmox',
               url: 'https://proxmox.local:8006',
-              desc: 'Hypervisor',
+              description: 'Hypervisor',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/proxmox.png',
               servers: [{ label: 'UI', url: 'https://proxmox.local:8006' }]
             },
@@ -82,7 +82,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-portainer',
               name: 'Portainer',
               url: 'http://portainer.local:9000',
-              desc: 'Docker container management',
+              description: 'Docker container management',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/portainer.png',
               servers: [{ label: 'Web', url: 'http://portainer.local:9000' }]
             },
@@ -90,7 +90,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-pihole',
               name: 'Pi-hole',
               url: 'http://pihole.local/admin',
-              desc: 'DNS ad blocker',
+              description: 'DNS ad blocker',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/pi-hole.png',
               servers: [{ label: 'Admin', url: 'http://pihole.local/admin' }]
             }
@@ -103,7 +103,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-nextcloud',
               name: 'Nextcloud',
               url: 'https://nextcloud.local',
-              desc: 'Personal cloud storage',
+              description: 'Personal cloud storage',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/nextcloud.png',
               servers: [{ label: 'Web', url: 'https://nextcloud.local' }]
             },
@@ -111,7 +111,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-syncthing',
               name: 'Syncthing',
               url: 'http://syncthing.local:8384',
-              desc: 'File synchronization',
+              description: 'File synchronization',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/syncthing.png',
               servers: [{ label: 'Web', url: 'http://syncthing.local:8384' }]
             }
@@ -124,7 +124,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-gitea',
               name: 'Gitea',
               url: 'http://gitea.local:3000',
-              desc: 'Self-hosted Git forge',
+              description: 'Self-hosted Git forge',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gitea.png',
               servers: [{ label: 'Web', url: 'http://gitea.local:3000' }]
             },
@@ -132,7 +132,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-code-server',
               name: 'Code Server',
               url: 'http://code.local:8080',
-              desc: 'VS Code in the browser',
+              description: 'VS Code in the browser',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vscode.png',
               servers: [{ label: 'IDE', url: 'http://code.local:8080' }]
             }
@@ -145,7 +145,7 @@ const DEFAULT_DEMO_CONFIG = {
               id: 'svc-vaultwarden',
               name: 'Vaultwarden',
               url: 'https://vault.local',
-              desc: 'Password manager',
+              description: 'Password manager',
               icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/vaultwarden.png',
               servers: [{ label: 'Web', url: 'https://vault.local' }]
             }
