@@ -169,8 +169,29 @@ function demoGetVersion() {
   return parseInt(sessionStorage.getItem(DEMO_VERSION_KEY) || '1', 10);
 }
 
+// Strip "?t=..." suffixes app.js appends to wallpaper/image URLs.
+// Data URLs like "data:image/webp;base64,..." must not have query strings.
+function cleanDataUrls(cfg) {
+  function strip(url) {
+    return (url && typeof url === 'string' && url.indexOf('data:') === 0)
+      ? url.replace(/\?.*$/, '') : url;
+  }
+  if (cfg.logoUrl) cfg.logoUrl = strip(cfg.logoUrl);
+  (cfg.pages || []).forEach(function(pg) {
+    pg.wallpaperDesktop = strip(pg.wallpaperDesktop);
+    pg.wallpaperMobile  = strip(pg.wallpaperMobile);
+    (pg.categories || []).forEach(function(cat) {
+      (cat.services || []).forEach(function(svc) {
+        if (svc.imageUrl) svc.imageUrl = strip(svc.imageUrl);
+      });
+    });
+  });
+  return cfg;
+}
+
 function demoSaveConfig(cfg) {
   try {
+    cleanDataUrls(cfg);
     sessionStorage.setItem(DEMO_CONFIG_KEY, JSON.stringify(cfg));
     const v = demoGetVersion() + 1;
     sessionStorage.setItem(DEMO_VERSION_KEY, String(v));
@@ -328,13 +349,43 @@ window.fetch = function demoFetch(input, init) {
     });
   }
 
-  // ── Everything else (backups, config/download, wallpaper, image, etc.)
+  // ── POST /api/wallpaper — store image as data URL directly (no server needed)
+  if (method === 'POST' && path === '/api/wallpaper') {
+    try {
+      var wbody = JSON.parse(init && init.body);
+      return Promise.resolve(fakeResponse({ ok: true, url: wbody.data || '' }));
+    } catch (_) {
+      return Promise.resolve(fakeResponse({ error: 'Invalid body' }, 400));
+    }
+  }
+
+  // ── DELETE /api/wallpaper/:name — app.js clears the field itself, just ack
+  if (method === 'DELETE' && path.indexOf('/api/wallpaper/') === 0) {
+    return Promise.resolve(fakeResponse({ ok: true }));
+  }
+
+  // ── POST /api/image — store image as data URL directly (no server needed)
+  if (method === 'POST' && path === '/api/image') {
+    try {
+      var ibody = JSON.parse(init && init.body);
+      return Promise.resolve(fakeResponse({ ok: true, url: ibody.data || '' }));
+    } catch (_) {
+      return Promise.resolve(fakeResponse({ error: 'Invalid body' }, 400));
+    }
+  }
+
+  // ── DELETE /api/image/:name
+  if (method === 'DELETE' && path.indexOf('/api/image/') === 0) {
+    return Promise.resolve(fakeResponse({ ok: true }));
+  }
+
+  // ── Everything else (backups, config/download, etc.)
   return Promise.resolve(fakeResponse({ error: 'Non disponible en mode démo' }, 400));
 };
 
 // ── 5. Action interceptor (capture phase) ─────────────────────────────────
 
-var BLOCKED_ACTIONS = { 'add-page': 1, 'json-pick-export': 1, 'json-pick-import': 1, 'open-backups': 1, 'upload-wallpaper': 1 };
+var BLOCKED_ACTIONS = { 'add-page': 1, 'json-pick-export': 1, 'json-pick-import': 1, 'open-backups': 1 };
 
 function showDemoToast() {
   var existing = document.getElementById('demo-toast');
@@ -364,15 +415,6 @@ document.addEventListener('click', function(e) {
       return;
     }
     el = el.parentElement;
-  }
-}, true);
-
-// Also block the wallpaper file input via change event
-document.addEventListener('change', function(e) {
-  if (e.target && e.target.dataset && e.target.dataset.action === 'upload-wallpaper') {
-    e.stopImmediatePropagation();
-    e.preventDefault();
-    showDemoToast();
   }
 }, true);
 
