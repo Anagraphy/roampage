@@ -169,12 +169,16 @@ function demoGetVersion() {
   return parseInt(sessionStorage.getItem(DEMO_VERSION_KEY) || '1', 10);
 }
 
-// Strip "?t=..." suffixes app.js appends to wallpaper/image URLs.
-// Data URLs like "data:image/webp;base64,..." must not have query strings.
+// Strip "?t=..." suffixes app.js appends to data URLs (corrupts them in CSS).
+// Returns true if at least one URL was cleaned.
 function cleanDataUrls(cfg) {
+  var cleaned = false;
   function strip(url) {
-    return (url && typeof url === 'string' && url.indexOf('data:') === 0)
-      ? url.replace(/\?.*$/, '') : url;
+    if (url && typeof url === 'string' && url.indexOf('data:') === 0 && url.indexOf('?') !== -1) {
+      cleaned = true;
+      return url.replace(/\?.*$/, '');
+    }
+    return url;
   }
   if (cfg.logoUrl) cfg.logoUrl = strip(cfg.logoUrl);
   (cfg.pages || []).forEach(function(pg) {
@@ -186,15 +190,21 @@ function cleanDataUrls(cfg) {
       });
     });
   });
-  return cfg;
+  return cleaned;
 }
 
 function demoSaveConfig(cfg) {
   try {
-    cleanDataUrls(cfg);
+    var hadDirtyUrls = cleanDataUrls(cfg);
     sessionStorage.setItem(DEMO_CONFIG_KEY, JSON.stringify(cfg));
     const v = demoGetVersion() + 1;
     sessionStorage.setItem(DEMO_VERSION_KEY, String(v));
+    // After a wallpaper/image upload, the in-memory config still holds the dirty
+    // URL (with ?t=...) which breaks CSS rendering. Force a config reload so
+    // app.js immediately picks up the clean URL from sessionStorage.
+    if (hadDirtyUrls && typeof window.refreshConfig === 'function') {
+      setTimeout(window.refreshConfig, 50);
+    }
     return v;
   } catch (_) {
     return demoGetVersion();
@@ -258,14 +268,41 @@ window.fetch = function demoFetch(input, init) {
     return Promise.resolve(fakeResponse({ status: 'unknown' }));
   }
 
-  // ── GET /api/icons
+  // ── GET /api/icons — fetch tree from jsdelivr, extract names, cache
   if (method === 'GET' && path === '/api/icons') {
-    return Promise.resolve(fakeResponse([]));
+    if (window._demoIconsCache) {
+      return Promise.resolve(fakeResponse(window._demoIconsCache));
+    }
+    return _origFetch('https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@main/tree.json')
+      .then(function(r) { return r.json(); })
+      .then(function(tree) {
+        var names = new Set();
+        if (!Array.isArray(tree)) {
+          Object.entries(tree).forEach(function(kv) {
+            if (Array.isArray(kv[1])) {
+              kv[1].forEach(function(f) {
+                if (typeof f === 'string') names.add(f.replace(/\.(svg|png|webp)$/i, ''));
+              });
+            }
+          });
+        }
+        var list = Array.from(names)
+          .filter(function(n) { return !n.endsWith('-light') && !n.endsWith('-dark') && !n.includes('-wordmark'); })
+          .sort();
+        window._demoIconsCache = list;
+        return fakeResponse(list);
+      })
+      .catch(function() { return fakeResponse([]); });
   }
 
-  // ── GET /api/icons/:name/url
+  // ── GET /api/icons/:name/url — return CDN png URL directly
   if (method === 'GET' && /^\/api\/icons\/[^/]+\/url$/.test(path)) {
-    return Promise.resolve(fakeResponse({ url: '' }));
+    var iconName = path.split('/')[3];
+    return Promise.resolve(fakeResponse({
+      name: iconName,
+      format: 'png',
+      url: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/' + iconName + '.png'
+    }));
   }
 
   // ── POST /api/integration/system  — fake homelab stats
