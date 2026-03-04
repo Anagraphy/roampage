@@ -23,6 +23,7 @@ const DEFAULT_DEMO_CONFIG = {
       title: 'Home',
       slug: 'home',
       columns: 2,
+      tags: { DOCKER: '#3b82f6', SELFHOSTED: '#6b7280', APP: '#10b981', CLOUD: '#f59e0b' },
       categories: [
         {
           title: 'Media',
