@@ -682,14 +682,16 @@ function applyCustomCss(){
   if(!gCss){if(gTag)gTag.remove();}
   else{
     if(!gTag){gTag=document.createElement("style");gTag.id="roampage-css-global";document.head.appendChild(gTag);}
-    gTag.textContent=`@layer user{${gCss}}`;
+    gTag.textContent=gCss;
+    gTag.disabled=editMode;
   }
   let pTag=document.getElementById("roampage-css-page");
   const pCss=(page().customCss||"").trim();
   if(!pCss){if(pTag)pTag.remove();}
   else{
     if(!pTag){pTag=document.createElement("style");pTag.id="roampage-css-page";document.head.appendChild(pTag);}
-    pTag.textContent=`@layer user{${pCss}}`;
+    pTag.textContent=pCss;
+    pTag.disabled=editMode;
   }
 }
 

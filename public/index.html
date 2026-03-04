@@ -13,7 +13,6 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="/pell.min.css" rel="stylesheet">
 <style>
-@layer base{
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#0f1219;color:#e2e8f0;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
@@ -256,9 +255,6 @@ select.edit-input option{background:#1e2030;color:#e2e8f0}
 .btn-lock{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:6px 10px;color:#64748b;font-size:14px;cursor:pointer;transition:all .2s;font-family:inherit}.btn-lock:hover{background:rgba(139,92,246,.15);border-color:rgba(139,92,246,.3);color:#a78bfa}
 .css-editor{width:100%;min-height:120px;margin-top:8px;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e2e8f0;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box}.css-editor:focus{outline:none;border-color:rgba(139,92,246,.5)}
 .css-scope-btn{font-size:11px;padding:3px 10px;border-radius:6px}.css-scope-active{background:rgba(139,92,246,.25)!important;border-color:rgba(139,92,246,.5)!important;color:#c4b5fd!important}
-}
-/* Edit mode UI protection — not in any @layer, takes precedence over user @layer styles */
-#shell.edit-mode-active{background:linear-gradient(180deg,#0f1219 0%,#131825 50%,#0f1219 100%)!important;color:#e2e8f0}
 </style>
 </head>
 <body>
