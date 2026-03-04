@@ -342,11 +342,12 @@ function showDemoToast() {
   var toast = document.createElement('div');
   toast.id = 'demo-toast';
   toast.style.cssText = [
-    'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
-    'background:#1e2030', 'border:1px solid rgba(139,92,246,.4)', 'color:#c4b5fd',
-    'padding:10px 18px', 'border-radius:10px', 'font-size:13px', 'font-weight:600',
-    'z-index:99999', 'box-shadow:0 4px 20px rgba(0,0,0,.5)',
-    'font-family:"DM Sans",sans-serif', 'white-space:nowrap', 'pointer-events:none'
+    'position:fixed', 'top:50%', 'left:50%', 'transform:translate(-50%,-50%)',
+    'background:#1a0a0a', 'border:2px solid #ef4444', 'color:#fca5a5',
+    'padding:16px 28px', 'border-radius:12px', 'font-size:14px', 'font-weight:700',
+    'z-index:99999', 'box-shadow:0 0 0 4px rgba(239,68,68,.15),0 8px 32px rgba(0,0,0,.6)',
+    'font-family:"DM Sans",sans-serif', 'white-space:nowrap', 'pointer-events:none',
+    'text-align:center'
   ].join(';');
   toast.textContent = 'This feature is not available in demo mode.';
   document.body.appendChild(toast);
