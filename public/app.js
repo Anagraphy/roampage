@@ -949,7 +949,7 @@ function render(){
   }
 
   const logoHtml=config.logoHidden?"":`<img src="${h(config.logoUrl||"/logo.png")}" class="header-logo" alt="Roampage">`;
-  const colPick=(editMode&&!mobile)?`<button class="btn-col" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/></svg>${colCount} col</button>`:"";
+  const colPick=(editMode&&!mobile)?`<button class="btn-col" style="margin-bottom:0" data-action="toggle-cols"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" opacity="${colCount>=2?1:.3}"/></svg>${colCount} col</button>`:"";
 
   const isProtected=!!(config._auth&&config._auth.globalPinEnabled);
   const lockBtnHtml=editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="global" title="Lock page">🔒</button>`:"";
