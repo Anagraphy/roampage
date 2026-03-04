@@ -954,9 +954,9 @@ function render(){
   const isProtected=!!(config._auth&&config._auth.globalPinEnabled);
   const lockBtnHtml=editMode&&isProtected&&!p.locked?`<button class="btn-lock" data-action="lock-scope" data-scope="global" title="Lock page">🔒</button>`:"";
   const headerInner=editMode
-    ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}`
+    ?`<input class="edit-input edit-title-inline" value="${h(p.title)}" data-action="edit-title">${colPick}${lockBtnHtml}`
     :`<h1>${h(p.title)}</h1><input class="search-input" placeholder="Search... (Ctrl+K)" value="${h(searchQuery)}">`;
-  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div>${lockBtnHtml}<button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
+  app.innerHTML=`<div class="header"><div class="header-left">${logoHtml}${headerInner}</div><button class="btn-config ${editMode?"active":""}" data-action="toggle-edit">${cfgIcon}</button></div>${tabBar}${body}${renderPopup(popupService)}${renderJsonModal()}${renderBackupModal()}${renderIconBrowser()}${renderWidgetPicker()}`;
   document.getElementById("shell")?.classList.toggle("edit-mode-active",editMode);
   document.title=p.title||"Roampage";
   applyWallpaper();
