@@ -45,6 +45,7 @@ let pinRemoveTarget=null; // null | "global" | pageId — drives the inline remo
 let iconBrowserOpen=false, iconBrowserCat=0, iconBrowserSvc=0, iconBrowserSearch="", allIcons=null, iconBrowserLoading=false;
 let widgetPickerCat=-1; // -1 = hidden, >=0 = category index
 let bmIconTarget=null; // {ci, si, li} for bookmark icon browser
+let bmDragSrc=null; // {ci, si, li} for bookmark drag reorder
 let cssScope=null; // null | "page" | "global"
 // Health: keyed by URL for per-server granularity
 let healthByUrl={};
@@ -271,7 +272,7 @@ function stopHealthLoop(){if(healthInterval){clearInterval(healthInterval);healt
 async function loadIcons(){if(allIcons)return;iconBrowserLoading=true;renderIconBrowserContent();try{const res=await fetch("/api/icons");allIcons=await res.json();}catch(e){allIcons=[];}iconBrowserLoading=false;renderIconBrowserContent();}
 function getFilteredIcons(){if(!allIcons)return[];const q=iconBrowserSearch.toLowerCase().trim();if(!q)return allIcons.slice(0,80);return allIcons.filter(n=>n.includes(q)).slice(0,80);}
 function renderIconBrowserContent(){const c=document.getElementById("icon-browser-results");if(!c)return;if(iconBrowserLoading){c.innerHTML='<div class="icon-browser-loading">Loading icons...</div>';return;}const f=getFilteredIcons();if(!f.length){c.innerHTML='<div class="icon-browser-empty">No icons found</div>';return;}const cur=page().categories[iconBrowserCat]?.services[iconBrowserSvc]?.icon||"";c.innerHTML=f.map(n=>{const p="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/"+n+".png";const sel=cur.includes("/"+n+".")?" selected":"";return`<div class="icon-browser-item${sel}" data-action="pick-icon" data-icon-name="${h(n)}"><img src="${h(p)}" alt="${h(n)}" loading="lazy" data-onerr="fade"><span>${h(n)}</span></div>`;}).join("");}
-function renderIconBrowser(){if(!iconBrowserOpen)return"";const sn=page().categories[iconBrowserCat]?.services[iconBrowserSvc]?.name||"service";return`<div class="icon-browser-overlay" id="icon-browser-overlay"><div class="icon-browser"><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-weight:700;color:#e2e8f0;font-size:15px">🔍 Pick an icon</div><button class="icon-btn" data-action="close-icon-browser" style="padding:4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><div style="font-size:12px;color:#64748b">Selecting icon for <strong style="color:#e2e8f0">${h(sn)}</strong> — ${allIcons?allIcons.length+" icons":"loading..."}</div><input class="edit-input" id="icon-search-input" value="${h(iconBrowserSearch)}" placeholder="Search icons..." data-action="icon-search" autofocus><div class="icon-browser-grid" id="icon-browser-results"></div></div></div>`;}
+function renderIconBrowser(){if(!iconBrowserOpen)return"";const sn=page().categories[iconBrowserCat]?.services[iconBrowserSvc]?.name||"service";return`<div class="icon-browser-overlay" id="icon-browser-overlay"><div class="icon-browser"><div style="display:flex;align-items:center;justify-content:space-between"><div style="font-weight:700;color:#e2e8f0;font-size:15px">🔍 Pick an icon</div><button class="icon-btn" data-action="close-icon-browser" style="padding:4px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><div style="font-size:12px;color:#64748b">Selecting icon for <strong style="color:#e2e8f0">${h(sn)}</strong> — ${allIcons?allIcons.length+" icons":"loading..."}</div><input class="edit-input" id="icon-search-input" value="${h(iconBrowserSearch)}" placeholder="Search icons..." data-action="icon-search" autofocus><div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08);flex-wrap:wrap"><label class="btn-browse" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">⬆ Upload<input type="file" accept="image/*" style="display:none" data-action="upload-bm-icon"></label><span style="font-size:11px;color:#64748b">Icône personnalisée (redimensionnée à 128×128)</span></div><div class="icon-browser-grid" id="icon-browser-results"></div></div></div>`;}
 
 function renderWidgetPicker(){
   if(widgetPickerCat<0)return"";
@@ -799,7 +800,7 @@ function renderEditWidgetBookmarks(svc,ci,si,total){
   const isOpen=openSvcBodies.has(`${ci}-${si}`);
   const links=(svc.links||[]).map((lk,li)=>{
     const iconPreview=lk.icon?`<img src="${h(lk.icon)}" style="width:20px;height:20px;border-radius:4px;object-fit:contain" data-onerr="hide">`:`<span style="color:#64748b;font-size:11px">no icon</span>`;
-    return`<div style="display:flex;flex-direction:column;gap:4px;padding:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:6px"><div class="server-row" style="margin:0"><input class="edit-input" style="width:100px;flex-shrink:0" value="${h(lk.label)}" data-action="edit-bm-label" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="Label"><input class="edit-input" style="flex:1" value="${h(lk.url)}" data-action="edit-bm-url" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="URL"><button class="icon-btn danger" data-action="del-bm" data-cat="${ci}" data-svc="${si}" data-li="${li}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><div class="server-row" style="margin:0">${iconPreview}<input class="edit-input" style="flex:1" value="${h(lk.icon||"")}" data-action="edit-bm-icon" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="Icon URL (auto-filled or manual)"><button class="btn-browse" style="padding:4px 8px;font-size:10px" data-action="open-bm-icon-browser" data-cat="${ci}" data-svc="${si}" data-li="${li}">🔍</button><button class="btn-browse" style="padding:4px 8px;font-size:10px" data-action="auto-detect-bm-icon" data-cat="${ci}" data-svc="${si}" data-li="${li}">Auto</button></div></div>`;
+    return`<div draggable="true" data-drag-bm-li="${li}" data-drag-bm-ci="${ci}" data-drag-bm-si="${si}" style="display:flex;flex-direction:column;gap:4px;padding:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:6px"><div class="server-row" style="margin:0"><span style="color:#64748b;cursor:grab;padding:0 2px;font-size:16px;flex-shrink:0;line-height:1;user-select:none" title="Glisser pour réordonner">⠿</span><input class="edit-input" style="width:100px;flex-shrink:0" value="${h(lk.label)}" data-action="edit-bm-label" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="Label"><input class="edit-input" style="flex:1" value="${h(lk.url)}" data-action="edit-bm-url" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="URL"><button class="icon-btn danger" data-action="del-bm" data-cat="${ci}" data-svc="${si}" data-li="${li}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div><div class="server-row" style="margin:0">${iconPreview}<input class="edit-input" style="flex:1" value="${h(lk.icon||"")}" data-action="edit-bm-icon" data-cat="${ci}" data-svc="${si}" data-li="${li}" placeholder="Icon URL (auto-filled or manual)"><button class="btn-browse" style="padding:4px 8px;font-size:10px" data-action="open-bm-icon-browser" data-cat="${ci}" data-svc="${si}" data-li="${li}">🔍</button><button class="btn-browse" style="padding:4px 8px;font-size:10px" data-action="auto-detect-bm-icon" data-cat="${ci}" data-svc="${si}" data-li="${li}">Auto</button></div></div>`;
   }).join("");
   return`<div class="edit-svc"><div class="edit-svc-header" data-action="toggle-svc" data-cat="${ci}" data-svc="${si}"><span style="font-size:18px">🔗</span><span class="edit-svc-name">Bookmarks</span><div style="display:flex;gap:4px">${widgetMoveButtons(ci,si,total)}</div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" class="chevron${isOpen?" open":""}" id="chev-${ci}-${si}"><path d="M6 9l6 6 6-6"/></svg></div><div class="edit-svc-body" id="svc-body-${ci}-${si}" style="display:${isOpen?"flex":"none"}"><div><label class="edit-label">Links</label>${links}<button class="btn-add" data-action="add-bm" data-cat="${ci}" data-svc="${si}">+ Add link</button></div></div></div>`;
 }
@@ -1558,6 +1559,23 @@ document.addEventListener("change",e=>{
     if(f==="iframeHeight")svc[f]=parseInt(el.value)||200;else svc[f]=el.value;
     saveConfig();
   }
+  // Icon upload from browser
+  if(el.dataset.action==="upload-bm-icon"){
+    const file=el.files[0];if(!file)return;
+    compressImage(file,128,128,0.9).then(async({dataUrl})=>{
+      try{
+        const name="icon_"+uid()+".webp";
+        const res=await fetch("/api/image",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,data:dataUrl})});
+        const data=await res.json();
+        if(data.url){
+          const iconUrl=data.url+"?t="+Date.now();
+          if(bmIconTarget){const t=bmIconTarget;page().categories[t.ci].services[t.si].links[t.li].icon=iconUrl;bmIconTarget=null;iconBrowserOpen=false;iconBrowserSearch="";saveConfig();render();reopenSvc(t.ci,t.si);}
+          else{page().categories[iconBrowserCat].services[iconBrowserSvc].icon=iconUrl;iconBrowserOpen=false;iconBrowserSearch="";saveConfig();render();reopenSvc(iconBrowserCat,iconBrowserSvc);}
+        }
+      }catch(e){console.error("Icon upload failed",e);}
+      el.value="";
+    }).catch(e=>{console.error("Icon compress failed",e);el.value="";});
+  }
   // Image widget upload
   if(el.dataset.action==="upload-widget-image"){
     const file=el.files[0];if(!file)return;
@@ -1636,6 +1654,43 @@ document.addEventListener("blur",e=>{const el=e.target;
       fetch("/api/icons/"+encodeURIComponent(name)+"/url").then(r=>r.json()).then(d=>{if(d.url){lk.icon=d.url;saveConfig();render();reopenSvc(ci,si);}}).catch(()=>{});}
   }
 },true);
+
+// ── Bookmark drag-and-drop reordering ────────────────────────
+document.addEventListener("dragstart",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="BUTTON"){return;}
+  const el=e.target.closest("[data-drag-bm-li]");if(!el)return;
+  bmDragSrc={ci:parseInt(el.dataset.dragBmCi),si:parseInt(el.dataset.dragBmSi),li:parseInt(el.dataset.dragBmLi)};
+  el.classList.add("dragging");e.dataTransfer.effectAllowed="move";
+});
+document.addEventListener("dragend",()=>{
+  document.querySelectorAll("[data-drag-bm-li]").forEach(x=>x.classList.remove("dragging","drop-target-before","drop-target-after"));
+  bmDragSrc=null;
+});
+document.addEventListener("dragover",e=>{
+  const el=e.target.closest("[data-drag-bm-li]");if(!el||!bmDragSrc)return;
+  e.preventDefault();e.dataTransfer.dropEffect="move";
+  const rect=el.getBoundingClientRect();
+  document.querySelectorAll("[data-drag-bm-li]").forEach(x=>x.classList.remove("drop-target-before","drop-target-after"));
+  el.classList.add(e.clientY<rect.top+rect.height/2?"drop-target-before":"drop-target-after");
+});
+document.addEventListener("dragleave",e=>{
+  const el=e.target.closest("[data-drag-bm-li]");
+  if(el&&!el.contains(e.relatedTarget))el.classList.remove("drop-target-before","drop-target-after");
+});
+document.addEventListener("drop",e=>{
+  const tgt=e.target.closest("[data-drag-bm-li]");if(!tgt||!bmDragSrc)return;
+  e.preventDefault();
+  const toAfter=tgt.classList.contains("drop-target-after");
+  tgt.classList.remove("drop-target-before","drop-target-after");
+  const dstLi=parseInt(tgt.dataset.dragBmLi);
+  const{ci,si,li:srcLi}=bmDragSrc;
+  if(srcLi===dstLi){bmDragSrc=null;return;}
+  const links=page().categories[ci].services[si].links;
+  const[moved]=links.splice(srcLi,1);
+  const insertAt=toAfter?(srcLi<dstLi?dstLi:dstLi+1):(srcLi<dstLi?dstLi-1:dstLi);
+  links.splice(insertAt,0,moved);
+  bmDragSrc=null;saveConfig();render();reopenSvc(ci,si);
+});
 
 loadConfig();
 let _lastWallpaperWidth=window.innerWidth;
