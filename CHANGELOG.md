@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.2
+
+### New features
+
+**Bookmark drag-and-drop reordering**
+
+Links inside a bookmark widget can now be reordered directly by dragging. A grab handle (⠿) appears on hover next to each bookmark — drag it to the desired position and the new order is saved automatically.
+
+---
+
+**Custom icon upload**
+
+The icon browser now includes an **⬆ Upload** button. Pick any image from your device and it is automatically compressed to a 128×128 WebP before being saved. Uploaded icons appear at the top of the icon browser and can be used like any built-in icon.
+
+---
+
 ## v1.1.1
 
 ### Fixes
